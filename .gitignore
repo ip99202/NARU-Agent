@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.venv311/
 venv/
 naru_agent.db
 .chainlit/
