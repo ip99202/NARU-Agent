@@ -4,7 +4,7 @@ Tool: get_faq_list
 자주 묻는 질문(FAQ) 게시판 키워드 검색.
 """
 from typing import Optional
-from mcp_server.server import mcp
+from mcp_server.app import mcp
 from mcp_server.tools.auth import get_session
 
 

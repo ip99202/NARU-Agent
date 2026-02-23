@@ -8,7 +8,7 @@ Tool: get_eigw_error_stats / get_eigw_monthly_summary
 """
 from datetime import date, datetime
 from typing import Optional
-from mcp_server.server import mcp
+from mcp_server.app import mcp
 from mcp_server.tools.auth import get_session
 
 

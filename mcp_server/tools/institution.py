@@ -1,50 +1,51 @@
 """
 Tool: search_institution_code / search_interface_list
 
-브라우저 분석으로 확인한 실제 API:
-  GET /api/bizcomm/cccd/orgcd/list/group  → 기관 그룹 목록
-  GET /api/bizcomm/allmeta                → 인터페이스 메타 검색 (기관코드, 키워드 등 필터)
+실제 확인된 API:
+  GET /api/bizcomm/inst_cd  → 기관코드 키워드 검색 (instNm 파라미터)
+  GET /api/bizcomm/allmeta  → 인터페이스 메타 검색 (기관코드, 키워드 등 필터)
 """
 from typing import Optional
-from mcp_server.server import mcp
+from mcp_server.app import mcp
 from mcp_server.tools.auth import get_session
 
 
 @mcp.tool()
-async def search_institution_code(instNm: str) -> dict:
+async def search_institution_code(instNm: str, size: int = 10) -> dict:
     """
-    기관명(한글 또는 코드)으로 인터페이스 목록에서 사용되는 기관 코드(reqInstCd)를 조회합니다.
-    예: "하나카드" → reqInstCd 값 반환
+    기관명(한글 또는 영문) 키워드로 기관코드를 조회합니다.
+    예: "하나카드" → instCd: "HNCD"
 
     Args:
         instNm: 기관명 키워드 (예: "하나카드", "SKCC")
+        size:   최대 반환 건수 (기본 10)
     """
     session = await get_session()
-    # 기관 코드 그룹 목록 전체 조회 후 키워드로 필터링
-    resp = await session.get("/api/bizcomm/cccd/orgcd/list/group")
+    params = {
+        "pageNo": 1,
+        "pageCount": 0,
+        "size": size,
+        "instCd": "",
+        "instNm": instNm,
+    }
+    resp = await session.get("/api/bizcomm/inst_cd", params=params)
     resp.raise_for_status()
     body = resp.json()
 
     if body.get("rstCd") != "S":
-        return {"error": body.get("rstMsg", "기관 목록 조회 실패")}
+        return {"error": body.get("rstMsg", "기관코드 조회 실패")}
 
-    groups = body.get("rstData", {})
-    results = []
-
-    # 실제 응답: rstData.ccCdLst 배열
-    data_list = groups.get("ccCdLst", []) if isinstance(groups, dict) else []
-
-    keyword = instNm.lower()
-    for item in data_list:
-        name = str(item.get("orgNm", "")).lower()
-        code = str(item.get("orgCd", ""))
-        if keyword in name or keyword in code.lower():
-            results.append({"instCd": code, "instNm": item.get("orgNm")})
+    rst_data = body.get("rstData", {})
+    items = rst_data.get("instCdLst", [])
+    total = rst_data.get("pageSet", {}).get("totalRowCount", 0)
 
     return {
         "keyword": instNm,
-        "count": len(results),
-        "results": results[:10],  # 최대 10건
+        "total": total,
+        "results": [
+            {"instCd": i.get("instCd"), "instNm": i.get("instNm")}
+            for i in items
+        ],
     }
 
 

@@ -7,7 +7,7 @@ Tool: get_queue_depth / get_queue_depth_detail
 """
 from datetime import date, datetime
 from typing import Optional
-from mcp_server.server import mcp
+from mcp_server.app import mcp
 from mcp_server.tools.auth import get_session
 
 
