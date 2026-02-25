@@ -22,3 +22,6 @@ class AgentState(TypedDict):
 
     # 사용자 거절 플래그 — True이면 executor가 실제 실행 대신 "거절" ToolMessage 생성
     execution_rejected: bool
+
+    # planner-executor 루프 횟수 — 무한루프 방지에 사용
+    iteration_count: int

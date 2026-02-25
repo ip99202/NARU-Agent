@@ -22,32 +22,30 @@ async def planner_node(state: AgentState, llm_with_tools: Any) -> dict:
     - tool_calls 있음 → pending_tool_calls에 저장, Executor로 이동
     - tool_calls 없음 → 직접 최종 답변
     """
+    current_iter = state.get("iteration_count", 0) + 1
     response: AIMessage = await llm_with_tools.ainvoke(state["messages"])
 
     if response.tool_calls:
-        # 승인 대기 목록에 등록
         pending = [
             {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
             for tc in response.tool_calls
         ]
-        # 실행 계획 요약 (Approval 화면에 표시)
-        plan_lines = [
+        plan = "\n".join(
             f"• {tc['name']}({json.dumps(tc['args'], ensure_ascii=False)})"
             for tc in pending
-        ]
-        plan = "\n".join(plan_lines)
-
+        )
         return {
             "messages": [response],
             "pending_tool_calls": pending,
             "plan": plan,
+            "iteration_count": current_iter,
         }
     else:
-        # 직접 답변 — Tool 없이 LLM이 바로 응답
         return {
             "messages": [response],
             "pending_tool_calls": [],
             "plan": "",
+            "iteration_count": current_iter,
         }
 
 
