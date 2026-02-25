@@ -24,7 +24,7 @@ async def get_queue_depth_monitoring(
     query_date: Optional[str] = None,
 ) -> dict:
     """
-    특정 날짜의 EAI MQ 큐 깊이(적체량) 현황을 조회합니다.
+    특정 날짜의 EAI MQ 큐 적체량 현황을 조회합니다.
     depthCnt가 높은 큐를 찾아 시스템 부하 상태를 파악합니다.
 
     Args:
@@ -66,26 +66,26 @@ async def get_queue_depth_monitoring(
         key=lambda q: int(q.get("depthCnt", 0) or 0),
         reverse=True,
     )
-    over_threshold = [q for q in sorted_queues if int(q.get("depthCnt", 0) or 0) > 0]
+    over_threshold_raw = [q for q in sorted_queues if int(q.get("depthCnt", 0) or 0) > 0]
+
+    def _parse_queue(q: dict) -> dict:
+        return {
+            "queueNm":      q.get("queueNm"),
+            "queueManager": q.get("queueManager"),
+            "depthCnt":     q.get("depthCnt"),
+            "inQ":          q.get("inQ"),
+            "outQ":         q.get("outQ"),
+            "time":         q.get("time"),
+            "ifNm":         q.get("ifNm"),
+            "domainNm":     q.get("domainNm"),
+        }
 
     return {
         "query_date": target_date,
         "total_queues": len(queues),
-        "over_threshold_count": len(over_threshold),
-        "top_queues": [
-            {
-                "queueNm":      q.get("queueNm"),
-                "queueManager": q.get("queueManager"),
-                "depthCnt":     q.get("depthCnt"),
-                "inQ":          q.get("inQ"),
-                "outQ":         q.get("outQ"),
-                "time":         q.get("time"),
-                "ifNm":         q.get("ifNm"),
-                "domainNm":     q.get("domainNm"),
-            }
-            for q in sorted_queues[:20]  # 상위 20개
-        ],
-        "over_threshold": over_threshold,
+        "over_threshold_count": len(over_threshold_raw),
+        "top_queues": [_parse_queue(q) for q in sorted_queues[:20]],
+        "over_threshold": [_parse_queue(q) for q in over_threshold_raw],
     }
 
 
@@ -273,6 +273,7 @@ async def get_mcg_chnl_status_all(
             - chnlId (str): 채널 ID
             - chnlNm (str): 채널 이름
             - chnlTyp (str): 채널 유형 (OUTBOUND / Ch to Ch)
+            - opCd (str): 운영 코드
             - tps (float): 초당 트랜잭션 수
             - status (str): 상태 ('OK' 정상 / 'FOK' 이상)
             - chrgrNm (str): 담당자 이름
@@ -337,6 +338,7 @@ async def get_mcg_chnl_status_all(
                 "chnlId":   c.get("chnlId"),
                 "chnlNm":   c.get("chnlNm"),
                 "chnlTyp":  c.get("chnlTyp"),
+                "opCd":     c.get("opCd"),
                 "tps":      c.get("tps"),
                 "status":   c.get("status"),
                 "chrgrNm":  c.get("chrgrNm"),
