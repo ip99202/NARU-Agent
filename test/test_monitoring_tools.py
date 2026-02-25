@@ -114,7 +114,7 @@ async def run_tests():
         sep = "─" * 65
         print(sep)
         print(f"🔍 {t['name']}")
-        print(f"   GET {NARU_BASE_URL}{t['url']}")
+        print(f"   GET {NARU_BASE_URL.rstrip('/')}{t['url']}")
         if t["params"]:
             print(f"   params: {t['params']}")
         try:
