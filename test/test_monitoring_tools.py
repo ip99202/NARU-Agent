@@ -1,7 +1,7 @@
 """
 모니터링 MCP Tools API 검증 스크립트
 
-4개의 모니터링 API를 직접 호출하여 응답을 검증합니다.
+11개의 모니터링 API를 직접 호출하여 응답을 검증합니다.
 실행: python3 test/test_monitoring_tools.py
 """
 import asyncio
@@ -103,6 +103,132 @@ async def run_tests():
                 f"mcgOutTpsStatus({len(body.get('rstData',{}).get('mcgOutTpsStatus',[]))}건) "
                 f"mcgSwgStatus({len(body.get('rstData',{}).get('mcgSwgStatus',[]))}건) "
                 f"mcgInChnlStatus({len(body.get('rstData',{}).get('mcgInChnlStatus',[]))}건)"
+            ),
+        },
+
+        # ─── 신규 추가 API ─────────────────────────────────────────
+        # ⑤ EIGW 온라인 에러건수 그래프
+        {
+            "name": "⑤ EIGW 온라인 에러건수 그래프",
+            "url":  "/api/monitoring/eigw/onlineErrorList/graph",
+            "params": {
+                "date": TODAY,
+                "interval": -60,
+                "eaiIfId": "",
+                "instCd": "",
+                "inputConf": "",
+            },
+            "validate": lambda body: (
+                "eigwOnlineErrorList" in body.get("rstData", {}),
+                f"eigwOnlineErrorList 확인: {len(body.get('rstData', {}).get('eigwOnlineErrorList', []))}건"
+            ),
+        },
+        # ⑥ EIGW 온라인 연동량(트랜잭션 카운트)
+        {
+            "name": "⑥ EIGW 온라인 연동량(트랜잭션 카운트)",
+            "url":  "/api/monitoring/eigw/onlineTrmsCntList",
+            "params": {
+                "date": TODAY,
+                "interval": -30,
+                "eaiIfId": "",
+                "instCd": "",
+                "inputConf": "",
+            },
+            "validate": lambda body: (
+                "eigwOnlineTrmsCntList" in body.get("rstData", {}),
+                f"eigwOnlineTrmsCntList 확인: {len(body.get('rstData', {}).get('eigwOnlineTrmsCntList', []))}건"
+            ),
+        },
+        # ⑦ EIGW 온라인 응답속도(경과 시간)
+        {
+            "name": "⑦ EIGW 온라인 응답속도(경과 시간)",
+            "url":  "/api/monitoring/eigw/onlineElapList",
+            "params": {
+                "date": TODAY,
+                "interval": -60,
+                "eaiIfId": "",
+                "instCd": "",
+                "inputConf": "",
+                "orderByRle": "ELAP",
+                "pageNo": 1,
+                "pageCount": 1,
+                "size": 5,
+            },
+            "validate": lambda body: (
+                "eigwElapDetail" in body.get("rstData", {}),
+                f"eigwElapDetail 확인: {len(body.get('rstData', {}).get('eigwElapDetail', []))}건"
+            ),
+        },
+        # ⑧ EIGW 파일 연동량
+        {
+            "name": "⑧ EIGW 파일 연동량",
+            "url":  "/api/monitoring/eigw/fileTrmsList",
+            "params": {
+                "date": TODAY,
+                "interval": -30,
+                "eaiIfId": "",
+                "instCd": "",
+                "fileNm": "",
+                "inputConf": "",
+                "stCdList": "SUCC,FAIL,REPROC",
+                "isUsingtimeCondition": "false",
+                "pageNo": 1,
+                "pageCount": 0,
+                "size": 10,
+            },
+            "validate": lambda body: (
+                "eigwFileTrmsList" in body.get("rstData", {}),
+                f"eigwFileTrmsList({len(body.get('rstData',{}).get('eigwFileTrmsList',[]))}건) "
+                f"pageSet({body.get('rstData',{}).get('pageSet',{})})"
+            ),
+        },
+        # ⑨ MCG 아웃바운드 TPS 이력
+        {
+            "name": "⑨ MCG 아웃바운드 TPS 이력",
+            "url":  "/api/monitoring/mcg/outTpsStatus",
+            "params": {
+                "date": TODAY,
+                "interval": -120,
+                "pageNo": 1,
+                "pageCount": 1,
+                "size": 5,
+            },
+            "validate": lambda body: (
+                "mcgOutTpsDetail" in body.get("rstData", {}),
+                f"mcgOutTpsDetail 확인: {len(body.get('rstData', {}).get('mcgOutTpsDetail', []))}건"
+            ),
+        },
+        # ⑩ MCG 인바운드 채널 상태
+        {
+            "name": "⑩ MCG 인바운드 채널 상태",
+            "url":  "/api/monitoring/mcg/chnlStatusIn",
+            "params": {
+                "pageNo": 1,
+                "pageCount": 0,
+                "size": 9999,
+            },
+            "validate": lambda body: (
+                "mcgInChnlStatus" in body.get("rstData", {}),
+                f"mcgInChnlStatus({len(body.get('rstData',{}).get('mcgInChnlStatus',[]))}건) "
+                f"pageSet({body.get('rstData',{}).get('pageSet',{})})"
+            ),
+        },
+        # ⑪ MCG 아웃바운드 채널 상태
+        {
+            "name": "⑪ MCG 아웃바운드 채널 상태",
+            "url":  "/api/monitoring/mcg/chnlStatusOut",
+            "params": {
+                "pageNo": 1,
+                "pageCount": 0,
+                "size": 9999,
+                "outboundYn": "Y",
+                "allServerYn": "Y",
+                "useYn": "Y",
+            },
+            "validate": lambda body: (
+                "mcgOutTpsStatus" in body.get("rstData", {}),
+                f"mcgOutTpsStatus({len(body.get('rstData',{}).get('mcgOutTpsStatus',[]))}건) "
+                f"pageSet({body.get('rstData',{}).get('pageSet',{})})"
             ),
         },
     ]
