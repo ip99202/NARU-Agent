@@ -3,9 +3,12 @@ NARU-Agent 설정 모듈
 환경 변수에서 API 접속 정보를 로드합니다.
 """
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# 어느 디렉토리에서 실행하든 프로젝트 루트의 .env를 찾습니다
+_ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=_ENV_PATH, override=True)
 
 # ── Azure OpenAI ──────────────────────────────────────────
 AZURE_OPENAI_API_KEY: str      = os.environ.get("AZURE_OPENAI_API_KEY", "")
