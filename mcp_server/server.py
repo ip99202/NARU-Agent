@@ -19,6 +19,7 @@ import mcp_server.tools.institution  # noqa: F401, E402
 import mcp_server.tools.eigw         # noqa: F401, E402
 import mcp_server.tools.queue        # noqa: F401, E402
 import mcp_server.tools.faq          # noqa: F401, E402
+import mcp_server.tools.monitoring   # noqa: F401, E402
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
