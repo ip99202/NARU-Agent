@@ -7,8 +7,7 @@ Tools: EIGW 통계 3종
 
 공통 필터: inputKeyword(인터페이스 ID), mqMngrNm, instCd(기관코드), instCdGrpYn(그룹화여부)
 
-주의: 기존 eigw.py의 get_eigw_error_stats도 /api/statistic/hourly/eigw를 사용하지만
-      srchType 파라미터 기반의 오류 분석 목적 툴이며, 이 파일은 기관코드 기준 통계 조회 툴입니다.
+
 """
 from datetime import date
 from typing import Optional

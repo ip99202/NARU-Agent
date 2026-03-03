@@ -16,9 +16,11 @@ from mcp_server.app import mcp  # noqa: E402
 
 # 모든 Tool 등록 (임포트하면 @mcp.tool() 데코레이터가 자동으로 mcp에 등록됨)
 import mcp_server.tools.institution   # noqa: F401, E402
-import mcp_server.tools.eigw          # noqa: F401, E402
+
 import mcp_server.tools.faq           # noqa: F401, E402
-import mcp_server.tools.monitoring    # noqa: F401, E402
+import mcp_server.tools.monitoring_eai # noqa: F401, E402
+import mcp_server.tools.monitoring_eigw # noqa: F401, E402
+import mcp_server.tools.monitoring_mcg # noqa: F401, E402
 import mcp_server.tools.statistic_eai  # noqa: F401, E402
 import mcp_server.tools.statistic_eigw # noqa: F401, E402
 import mcp_server.tools.statistic_mcg  # noqa: F401, E402
