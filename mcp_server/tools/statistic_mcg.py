@@ -64,6 +64,7 @@ async def get_mcg_channel_list(
             - useYn (str): 사용 여부
             - mapperCnt (int): 매퍼 수
             - chnlRmk (str): 비고 (담당자 정보 등)
+            - tcpGwNm (str): TCP 게이트웨이 이름 (없으면 빈 문자열)
             - creDt (int): 생성 시간 (Unix Timestamp ms)
             - chgDt (int): 변경 시간 (Unix Timestamp ms)
         page_set (dict): 페이지네이션 정보

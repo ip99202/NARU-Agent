@@ -361,7 +361,7 @@ async def get_eigw_online_elap_list(
         query_date (str): 조회 날짜
         interval (int): 조회 구간(분)
         item_count (int): 반환된 항목 수
-        elap_list (list): 응답속도 상세 목록
+        elap_list (list): 응답속도 상세 목록 (elapAvg 내림차순 기본 정렬)
             - date (str): 날짜
             - time (str): 측정 시각 (HHMM)
             - eaiIfId (str): EAI 인터페이스 ID
@@ -377,15 +377,19 @@ async def get_eigw_online_elap_list(
             - failTotCnt (int): 총 실패 건수
             - elapTotCnt (int): 경과 시간 집계 건수
             - elapCnt (int): 경과 시간 측정 건수
-            - elapMin (float): 최소 응답 시간(초)
-            - elapMax (float): 최대 응답 시간(초)
-            - elapAvg (float): 평균 응답 시간(초)
-            - elapTotAvg (float): 전체 평균 응답 시간(초)
+            - elapMin (float): 최소 응답 시간(ms)
+            - elapMax (float): 최대 응답 시간(ms)
+            - elapAvg (float): 평균 응답 시간(ms)
+            - elapTotAvg (float): 전체 평균 응답 시간(ms)
             - errorF001 (int): 연결 오류 (대외기관 접속 불가)
             - errorF002 (int): 데몬 미기동 (대외기관 데몬 접속 불가)
             - errorF004 (int): 수신 오류 (응답 전문 수신 대기 중 타임아웃)
             - errorF005 (int): 송신 오류 ('SKT-> 기관'으로 전송 중 문제)
             - errorEtc  (int): 기타 (HTTP 연동 중 오류 등)
+            - rcvChrgrOrgNm1 (str): 수신 담당 조직명
+            - rcvChrgrNm1 (str): 수신 담당자 이름
+            - sndChrgrOrgNm1 (str): 발신 담당 조직명
+            - sndChrgrNm1 (str): 발신 담당자 이름
     """
     session = await get_session()
     target_date = query_date or _today()
@@ -419,30 +423,34 @@ async def get_eigw_online_elap_list(
         "item_count": len(items),
         "elap_list": [
             {
-                "date":        i.get("date"),
-                "time":        i.get("time"),
-                "eaiIfId":     i.get("eaiIfId"),
-                "onlineDealNm": i.get("onlineDealNm"),
-                "sysNm":       i.get("sysNm"),
-                "conf":        i.get("conf"),
-                "instCd":      i.get("instCd"),
-                "aggreMthd":   i.get("aggreMthd"),
-                "pgmTyp":      i.get("pgmTyp"),
-                "srGb":        i.get("srGb"),
-                "totCnt":      i.get("totCnt"),
-                "normalCnt":   i.get("normalCnt"),
-                "failTotCnt":  i.get("failTotCnt"),
-                "elapTotCnt":  i.get("elapTotCnt"),
-                "elapCnt":     i.get("elapCnt"),
-                "elapMin":     i.get("elapMin"),
-                "elapMax":     i.get("elapMax"),
-                "elapAvg":     i.get("elapAvg"),
-                "elapTotAvg":  i.get("elapTotAvg"),
-                "errorF001":   i.get("errorF001"),
-                "errorF002":   i.get("errorF002"),
-                "errorF004":   i.get("errorF004"),
-                "errorF005":   i.get("errorF005"),
-                "errorEtc":    i.get("errorEtc"),
+                "date":           i.get("date"),
+                "time":           i.get("time"),
+                "eaiIfId":        i.get("eaiIfId"),
+                "onlineDealNm":   i.get("onlineDealNm"),
+                "sysNm":          i.get("sysNm"),
+                "conf":           i.get("conf"),
+                "instCd":         i.get("instCd"),
+                "aggreMthd":      i.get("aggreMthd"),
+                "pgmTyp":         i.get("pgmTyp"),
+                "srGb":           i.get("srGb"),
+                "totCnt":         i.get("totCnt"),
+                "normalCnt":      i.get("normalCnt"),
+                "failTotCnt":     i.get("failTotCnt"),
+                "elapTotCnt":     i.get("elapTotCnt"),
+                "elapCnt":        i.get("elapCnt"),
+                "elapMin":        i.get("elapMin"),
+                "elapMax":        i.get("elapMax"),
+                "elapAvg":        i.get("elapAvg"),
+                "elapTotAvg":     i.get("elapTotAvg"),
+                "errorF001":      i.get("errorF001"),
+                "errorF002":      i.get("errorF002"),
+                "errorF004":      i.get("errorF004"),
+                "errorF005":      i.get("errorF005"),
+                "errorEtc":       i.get("errorEtc"),
+                "rcvChrgrOrgNm1": i.get("rcvChrgrOrgNm1"),
+                "rcvChrgrNm1":    i.get("rcvChrgrNm1"),
+                "sndChrgrOrgNm1": i.get("sndChrgrOrgNm1"),
+                "sndChrgrNm1":    i.get("sndChrgrNm1"),
             }
             for i in items
         ],

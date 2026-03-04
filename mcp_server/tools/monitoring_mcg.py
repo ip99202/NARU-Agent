@@ -166,6 +166,8 @@ async def get_mcg_out_tps_status(
     """
     MCG 아웃바운드 채널별 TPS(Transactions Per Second) 이력을 조회합니다.
     특정 채널 또는 업무 코드 기준으로 시간대별 TPS 트렌드를 확인합니다.
+    현재 채널 상태(current_channel_status)도 함께 반환되므로
+    이력 분석과 현재 상태 확인을 동시에 할 수 있습니다.
 
     Args:
         query_date:  조회 날짜 (YYYYMMDD, 기본=오늘)
@@ -180,15 +182,26 @@ async def get_mcg_out_tps_status(
     Returns:
         query_date (str): 조회 날짜
         interval (int): 조회 구간(분)
-        item_count (int): 반환된 항목 수
-        tps_detail (list): TPS 상세 목록
+        item_count (int): tps_detail 반환 항목 수
+        tps_detail (list): 시간대별 TPS 이력 목록
             - date (str): 날짜
             - time (str): 측정 시각 (HHMM)
             - server (str): 서버명 (예: MCGP1)
             - opCd (str): 업무 코드
             - chnlNm (str): 채널 이름
             - tps (float): 초당 트랜잭션 수
-            - status (str): 상태 (OK / MID / 기타)
+            - status (str): 상태 (OK=정상 / MID=중간 / 기타=이상)
+        current_channel_status (list): 현재 아웃바운드 채널 상태 목록 (페이지 기준)
+            - date (str): 날짜
+            - time (str): 측정 시각 (HHMM)
+            - server (str): 서버명
+            - chnlId (str): 채널 ID
+            - chnlNm (str): 채널 이름
+            - chnlTyp (str): 채널 유형 (OUTBOUND / Ch to Ch)
+            - opCd (str): 업무 코드
+            - tps (float): 초당 트랜잭션 수
+            - chrgrNm (str): 담당자 이름
+            - status (str): 상태 (OK=정상 / MID=중간 / 기타=이상)
     """
     session = await get_session()
     target_date = query_date or _today()
