@@ -411,7 +411,7 @@ async def get_eigw_online_elap_list(
     if body.get("rstCd") != "S":
         return {"error": body.get("rstMsg", "EIGW 온라인 응답속도 조회 실패")}
 
-    items: list = body.get("rstData", {}).get("eigwElapDetail", [])
+    items: list = body.get("rstData", {}).get("eigwElapList", [])
 
     return {
         "query_date": target_date,

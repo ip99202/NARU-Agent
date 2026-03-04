@@ -23,10 +23,6 @@ def _this_year() -> str:
     return date.today().strftime("%Y")
 
 
-def _hourly_summary(items: list) -> list:
-    """t0~t23 시간대 데이터를 hour_data 리스트로 변환합니다."""
-    return {f"t{h}": item.get(f"t{h}", 0) for h in range(24)}
-
 
 # ─────────────────────────────────────────────────────────────
 # 1. EAI 시간별 통계

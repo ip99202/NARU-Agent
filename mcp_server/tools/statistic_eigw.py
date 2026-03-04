@@ -68,6 +68,7 @@ async def get_statistic_hourly_eigw(
     """
     session = await get_session()
     params = {
+        "pageNo":        page_no,
         "size":          size,
         "statDate":      stat_date or _today(),
         "inputKeyword":  input_keyword or "",
@@ -152,6 +153,7 @@ async def get_statistic_daily_eigw(
     """
     session = await get_session()
     params = {
+        "pageNo":       page_no,
         "size":         size,
         "statDate":     stat_date or _this_month(),
         "inputKeyword": input_keyword or "",
@@ -235,6 +237,7 @@ async def get_statistic_monthly_eigw(
     """
     session = await get_session()
     params = {
+        "pageNo":       page_no,
         "size":         size,
         "statDate":     stat_date or _this_year(),
         "inputKeyword": input_keyword or "",

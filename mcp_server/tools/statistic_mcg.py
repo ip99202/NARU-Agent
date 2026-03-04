@@ -113,6 +113,7 @@ async def get_mcg_channel_list(
                 "useYn":      i.get("useYn"),
                 "mapperCnt":  i.get("mapperCnt"),
                 "chnlRmk":    i.get("chnlRmk"),
+                "tcpGwNm":    i.get("tcpGwNm"),
                 "creDt":      i.get("creDt"),
                 "chgDt":      i.get("chgDt"),
             }

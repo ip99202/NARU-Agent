@@ -212,6 +212,7 @@ async def get_mcg_out_tps_status(
         return {"error": body.get("rstMsg", "MCG 아웃바운드 TPS 조회 실패")}
 
     items: list = body.get("rstData", {}).get("mcgOutTpsDetail", [])
+    current: list = body.get("rstData", {}).get("mcgOutTpsStatus", [])
 
     return {
         "query_date": target_date,
@@ -228,6 +229,21 @@ async def get_mcg_out_tps_status(
                 "status": i.get("status"),
             }
             for i in items
+        ],
+        "current_channel_status": [
+            {
+                "date":    c.get("date"),
+                "time":    c.get("time"),
+                "server":  c.get("server"),
+                "chnlId":  c.get("chnlId"),
+                "chnlNm":  c.get("chnlNm"),
+                "chnlTyp": c.get("chnlTyp"),
+                "opCd":    c.get("opCd"),
+                "tps":     c.get("tps"),
+                "chrgrNm": c.get("chrgrNm"),
+                "status":  c.get("status"),
+            }
+            for c in current
         ],
     }
 
