@@ -21,6 +21,7 @@ async def test_login():
         base_url=NARU_BASE_URL,
         timeout=30.0,
         follow_redirects=True,
+        verify=False,
     ) as client:
 
         # ── Step 1: pre-login ──────────────────────────────────────

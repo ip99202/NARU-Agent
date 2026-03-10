@@ -20,9 +20,14 @@ def _today() -> str:
 @mcp.tool()
 async def get_eigw_online_error_list() -> dict:
     """
-    현재 기준 EIGW 시스템에서 발생한
-    온라인 에러 목록을 조회합니다.
-    오류 코드별(F001/F002/F004/F005/기타) 건수와 담당자 정보를 반환합니다.
+    현재 시점의 EIGW 온라인 오류 목록 전체를 조회합니다.
+    파라미터 없이 전체 오류를 스냅샷으로 보여주며, 기관(inst_cd)이나
+    인터페이스(eai_if_id)로 필터링하는 기능이 없습니다.
+
+    ⚠️ 사용 시나리오:
+        - "지금 eai eigw 오류 있어?" → 이 툴 사용  (전체 현황)
+        - "하나카드 오류 확인해줘" → 이 툴 사용 불가, 필터 없음
+          → 기관/인터페이스 지정 시 get_eigw_online_error_graph 사용
 
     Returns:
         total_error_count (int): 전체 오류 건수 합산
@@ -117,15 +122,21 @@ async def get_eigw_online_error_graph(
     input_conf: Optional[str] = None,
 ) -> dict:
     """
-    특정 EIGW 인터페이스의 시간대별 온라인 에러건수 그래프 데이터를 조회합니다.
-    지정 시간 기준으로 interval 분 이전까지의 구간에서 발생한 에러 이력을 확인합니다.
+    특정 기관(inst_cd) 또는 인터페이스(eai_if_id)를 지정하여
+    EIGW 온라인 오류 이력을 날짜/시간 범위로 조회합니다.
+
+    ✅ 이 툴은 다음 상황에 사용:
+        - "하나카드 오류 확인" → inst_cd='HNCD' 지정
+        - "오늘 XX 인터페이스 오류 이력" → query_date + eai_if_id 지정
+        - "오늘 XX 기관 오류" → query_date + inst_cd 지정
+        - 전체 현황(필터 없음)은 get_eigw_online_error_list 사용
 
     Args:
         query_date:  조회 날짜 (YYYYMMDD, 기본=오늘)
-        time:        조회 기준 시각 (HHMM, 예: '2000')
+        time:        조회 기준 시각 (HHMM, 예: '2000', 기본=현재)
         interval:    조회 구간 (분, 음수=과거 방향, 기본=-60)
-        eai_if_id:   EAI 인터페이스 ID (예: 'MVS.EGW_KCTT_CUST_INFO_MFF')
-        inst_cd:     기관 코드 필터 (빈 값=전체)
+        eai_if_id:   EAI 인터페이스 ID 필터 (예: 'MVS.EGW_KCTT_CUST_INFO_MFF')
+        inst_cd:     기관 코드 필터 (예: 'HNCD'=하나카드, 빈 값=전체)
         input_conf:  설정 코드 필터 (빈 값=전체)
 
     Returns:

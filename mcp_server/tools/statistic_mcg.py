@@ -243,7 +243,8 @@ async def get_statistic_hourly_mcg(
     Returns:
         stat_date (str): 조회 날짜 (YYYYMMDD)
         total_row_count (int): 전체 거래 수
-        hourly_list (list): 거래별 시간대별 통계 목록
+        hourly_list (list): 단일 운영코드(opCd) 단위로 분리된 통계 목록
+            - 특정 운영코드 하나에만 해당하는 정보를 볼 때 사용합니다.
             - tx (str): 거래 코드 (dealCd)
             - dealNm (str): 거래 이름
             - opCd (str): 운영 코드
@@ -251,7 +252,8 @@ async def get_statistic_hourly_mcg(
             - totCnt (int): 해당 날짜 총 트랜잭션 수
             - statDate (str): 통계 날짜
             - hourly (dict): t0~t23 시간대별 트랜잭션 수
-        hourly_total (list): 위 목록의 시간대별 합계 (동일 구조)
+        hourly_total (list): 모든 운영코드(opCd)의 트랜잭션을 합산한 전체 통계 목록
+            - 특정 MCG(거래코드)의 '모든' 호츨건수/전체 트래픽 총합을 확인할 때는 반드시 이 필드를 사용해야 합니다.
         page_set (dict): 페이지네이션 정보
     """
     session = await get_session()
@@ -318,7 +320,8 @@ async def get_statistic_daily_mcg(
     Returns:
         stat_date (str): 조회 연월 (YYYYMM)
         total_row_count (int): 전체 거래 수
-        daily_list (list): 거래별 일별 통계 목록
+        daily_list (list): 단일 운영코드(opCd) 단위로 분리된 통계 목록
+            - 특정 운영코드 하나에만 해당하는 정보를 볼 때 사용합니다.
             - tx (str): 거래 코드 (dealCd)
             - dealNm (str): 거래 이름
             - opCd (str): 운영 코드
@@ -326,7 +329,8 @@ async def get_statistic_daily_mcg(
             - totCnt (int): 해당 월 총 트랜잭션 수
             - statDate (str): 통계 연월
             - daily (dict): d1~d31 일자별 트랜잭션 수
-        daily_total (list): 위 목록의 일자별 합계 (동일 구조)
+        daily_total (list): 모든 운영코드(opCd)의 트랜잭션을 합산한 전체 통계 목록
+            - 특정 MCG(거래코드)의 '모든' 호출건수/전체 트래픽 총합을 확인할 때는 반드시 이 필드를 사용해야 합니다.
         page_set (dict): 페이지네이션 정보
     """
     session = await get_session()
@@ -393,7 +397,8 @@ async def get_statistic_monthly_mcg(
     Returns:
         stat_date (str): 조회 연도 (YYYY)
         total_row_count (int): 전체 거래 수
-        monthly_list (list): 거래별 월별 통계 목록
+        monthly_list (list): 단일 운영코드(opCd) 단위로 분리된 통계 목록
+            - 특정 운영코드 하나에만 해당하는 정보를 볼 때 사용합니다.
             - tx (str): 거래 코드 (dealCd)
             - dealNm (str): 거래 이름
             - opCd (str): 운영 코드
@@ -401,7 +406,8 @@ async def get_statistic_monthly_mcg(
             - totCnt (int): 해당 연도 총 트랜잭션 수
             - statDate (str): 통계 연도
             - monthly (dict): m1~m12 월별 트랜잭션 수
-        monthly_total (list): 위 목록의 월별 합계 (동일 구조)
+        monthly_total (list): 모든 운영코드(opCd)의 트랜잭션을 합산한 전체 통계 목록
+            - 특정 MCG(거래코드)의 '모든' 호출건수/전체 트래픽 총합을 확인할 때는 반드시 이 필드를 사용해야 합니다.
         page_set (dict): 페이지네이션 정보
     """
     session = await get_session()
