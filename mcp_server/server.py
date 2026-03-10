@@ -25,6 +25,7 @@ import mcp_server.tools.statistic_eai  # noqa: F401, E402
 import mcp_server.tools.statistic_eigw # noqa: F401, E402
 import mcp_server.tools.statistic_mcg  # noqa: F401, E402
 import mcp_server.tools.datetime_utils  # noqa: F401, E402  ← 날짜 계산 툴
+import mcp_server.tools.application     # noqa: F401, E402  ← 인터페이스 신청 툴
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

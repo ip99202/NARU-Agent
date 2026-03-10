@@ -20,6 +20,7 @@ async def login() -> httpx.AsyncClient:
         base_url=NARU_BASE_URL,
         timeout=30.0,
         follow_redirects=True,
+        verify=False,
     )
 
     # Step 1: pre-login (JSON)
