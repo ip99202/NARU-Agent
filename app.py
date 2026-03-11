@@ -7,6 +7,10 @@ app.py — Chainlit 진입점 (NARU Agent UI)
   - 거절: graph.update_state()로 synthetic ToolMessages 주입 후 Command(resume=None)
     (synthetic ToolMessage로 state를 정상 시퀀스로 유지하여 400 에러 방지)
   - 새 메시지 도착 시: pending interrupt가 있으면 먼저 state를 정상화
+
+로그인:
+  - @cl.password_auth_callback 로 채팅 전 별도 로그인 페이지에서 ID/PW 입력 (비밀번호 마스킹)
+  - 로그인 성공 시 cl.User 반환 → on_chat_start에서 MCP 초기화
 """
 import json
 
@@ -23,14 +27,21 @@ from config import (
     AZURE_OPENAI_API_VERSION,
 )
 from graph.graph import build_graph
+from mcp_server.tools.auth import login
 
-MCP_CONFIG = {
-    "naru": {
-        "command": "python3",
-        "args": ["mcp_server/server.py"],
-        "transport": "stdio",
+def _build_mcp_config(naru_user_id: str, naru_user_pw: str) -> dict:
+    """MCP 서버 서브프로세스에 자격증명을 환경변수로 주입한 설정 반환."""
+    return {
+        "naru": {
+            "command": "python3",
+            "args": ["mcp_server/server.py"],
+            "transport": "stdio",
+            "env": {
+                "NARU_USER_ID": naru_user_id,
+                "NARU_USER_PW": naru_user_pw,
+            },
+        }
     }
-}
 
 SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 사용자의 요청에 답하기 위해 반드시 제공된 Tool을 사용해야 합니다.
@@ -68,11 +79,43 @@ def _inject_abort_tool_messages(graph, config: dict, pending_tool_calls: list):
     graph.update_state(config, {"messages": synthetic_msgs, "pending_tool_calls": []})
 
 
+# ── 로그인 (비밀번호 마스킹 로그인 페이지) ──────────────────────────────
+@cl.password_auth_callback
+async def auth_callback(username: str, password: str) -> cl.User | None:
+    """Chainlit 로그인 페이지에서 ID/PW를 받아 NARU 로그인.
+    성공 시 cl.User 반환, 실패 시 None 반환 (Chainlit이 오류 표시).
+    """
+    try:
+        from mcp_server.tools import auth as _auth_module
+        new_sess = await login(username, password)
+        _auth_module._session = new_sess
+        print(f"[Auth] Chainlit 로그인 성공: {username}")
+        return cl.User(
+            identifier=username,
+            metadata={"naru_user_id": username, "naru_user_pw": password},
+        )
+    except Exception as e:
+        print(f"[Auth] 로그인 실패: {e}")
+        return None
+
+
+# ── 에이전트 초기화 ────────────────────────────────────────────────────
 @cl.on_chat_start
 async def on_chat_start():
-    await cl.Message(content="⏳ NARU Agent 초기화 중...").send()
+    """로그인 완료 후 MCP + LangGraph 초기화."""
+    user: cl.User = cl.user_session.get("user")
+    naru_id = user.metadata.get("naru_user_id", "") if user and user.metadata else ""
+    naru_pw = user.metadata.get("naru_user_pw", "") if user and user.metadata else ""
 
-    mcp_client = MultiServerMCPClient(MCP_CONFIG)
+    if not naru_id or not naru_pw:
+        await cl.Message(content="⚠️ 로그인 정보를 찾을 수 없습니다. 새로고침 후 다시 로그인해 주세요.").send()
+        return
+
+    init_msg = await cl.Message(content="⏳ NARU Agent 초기화 중...").send()
+
+    # 자격증명을 MCP 서브프로세스 환경변수로 주입
+    mcp_config = _build_mcp_config(naru_id, naru_pw)
+    mcp_client = MultiServerMCPClient(mcp_config)
     tools = await mcp_client.get_tools()
     tools_map = {t.name: t for t in tools}
 
@@ -90,13 +133,14 @@ async def on_chat_start():
     cl.user_session.set("thread_id", thread_id)
 
     tool_names = ", ".join(tools_map.keys())
-    await cl.Message(
-        content=(
+    await _update_msg(
+        init_msg,
+        (
             f"✅ NARU Agent 준비 완료!\n\n"
             f"**로드된 Tool ({len(tools)}개):** {tool_names}\n\n"
             f"무엇을 도와드릴까요?"
-        )
-    ).send()
+        ),
+    )
 
 
 @cl.on_message
@@ -114,7 +158,6 @@ async def on_message(message: cl.Message):
         pending = snapshot.values.get("pending_tool_calls", [])
         print(f"[State] 이전 interrupt 감지, synthetic ToolMessage 주입: {[tc['name'] for tc in pending]}")
         _inject_abort_tool_messages(graph, config, pending)
-        # 그래프를 executor 통해 완전히 종료시킴 (pending_tool_calls가 비어있으므로 executor는 아무것도 안 함)
         async for _ in graph.astream(None, config=config):
             pass
 
@@ -179,7 +222,6 @@ async def _show_approval_ui(graph, config: dict, snapshot):
         timeout=120,
     ).send()
 
-    # Chainlit 2.x: res는 dict {'name':..,'value':..,'label':..,'payload':..} 형태
     print(f"[Approval] res 원본: {res}")
     is_approved = False
     if res:
@@ -192,7 +234,6 @@ async def _show_approval_ui(graph, config: dict, snapshot):
     print(f"[Approval] 최종 결정: {decision}")
 
     if decision == "rejected":
-        # 거절: synthetic ToolMessage 주입으로 state 정상화 → planner가 대안 답변
         pending_now = graph.get_state(config).values.get("pending_tool_calls", [])
         _inject_abort_tool_messages(graph, config, pending_now)
         result_msg = await cl.Message(content="❌ 거절됨 — 대안 답변 생성 중...").send()

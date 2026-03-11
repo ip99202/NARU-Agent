@@ -17,6 +17,5 @@ AZURE_OPENAI_API_VERSION: str  = os.environ.get("AZURE_OPENAI_API_VERSION", "202
 AZURE_OPENAI_DEPLOYMENT: str   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
 
 # ── NARU API ──────────────────────────────────────────────
+# 계정 정보(ID/PW)는 Chainlit UI에서 런타임에 입력받으므로 여기서 로드하지 않습니다.
 NARU_BASE_URL: str = os.environ.get("NARU_BASE_URL", "")
-NARU_USER_ID: str  = os.environ.get("NARU_USER_ID", "")
-NARU_USER_PW: str  = os.environ.get("NARU_USER_PW", "")
