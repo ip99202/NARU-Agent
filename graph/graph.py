@@ -34,10 +34,10 @@ def route_after_planner(state: AgentState) -> str:
     iteration_count가 MAX_ITERATIONS를 초과하면 pending_tool_calls가 있어도
     END로 강제 라우팅하여 무한루프를 차단합니다.
     """
-    if state.get("iteration_count", 0) >= MAX_ITERATIONS:
-        # 루프 한도 초과 — 강제 종료
-        print(f"[Guard] iteration_count={state.get('iteration_count')} >= MAX_ITERATIONS={MAX_ITERATIONS}, 강제 종료")
-        return "final_answer"
+    # if state.get("iteration_count", 0) >= MAX_ITERATIONS:
+    #     # 루프 한도 초과 — 강제 종료
+    #     print(f"[Guard] iteration_count={state.get('iteration_count')} >= MAX_ITERATIONS={MAX_ITERATIONS}, 강제 종료")
+    #     return "final_answer"
     if state.get("pending_tool_calls"):
         return "need_execution"
     return "final_answer"
