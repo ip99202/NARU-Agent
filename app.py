@@ -11,14 +11,19 @@ app.py — Chainlit 진입점 (NARU Agent UI)
 로그인:
   - @cl.password_auth_callback 로 채팅 전 별도 로그인 페이지에서 ID/PW 입력 (비밀번호 마스킹)
   - 로그인 성공 시 cl.User 반환 → on_chat_start에서 MCP 초기화
+
+스트리밍 설계:
+  - stream_mode=["messages", "updates"] 사용
+  - "messages" 이벤트 중 metadata["langgraph_node"]=="planner" 인 AIMessageChunk만 스트리밍
+    (ToolMessage JSON 원본 노출 차단)
+  - "updates" 이벤트는 cl.Step으로 "계획 수립"/"도구 실행" 과정을 접힌 토글로 표시
 """
 import json
 
 import chainlit as cl
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessageChunk
 from langchain_openai import AzureChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.types import Command
 
 from config import (
     AZURE_OPENAI_API_KEY,
@@ -28,6 +33,7 @@ from config import (
 )
 from graph.graph import build_graph
 from mcp_server.tools.auth import login
+
 
 def _build_mcp_config(naru_user_id: str, naru_user_pw: str) -> dict:
     """MCP 서버 서브프로세스에 자격증명을 환경변수로 주입한 설정 반환."""
@@ -42,6 +48,7 @@ def _build_mcp_config(naru_user_id: str, naru_user_pw: str) -> dict:
             },
         }
     }
+
 
 SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 사용자의 요청에 답하기 위해 반드시 제공된 Tool을 사용해야 합니다.
@@ -83,6 +90,13 @@ def _inject_abort_tool_messages(graph, config: dict, pending_tool_calls: list):
         for tc in pending_tool_calls
     ]
     graph.update_state(config, {"messages": synthetic_msgs, "pending_tool_calls": []})
+
+
+def _get_node_from_metadata(metadata) -> str:
+    """LangGraph 메시지 스트림 metadata에서 노드 이름 추출."""
+    if isinstance(metadata, dict):
+        return metadata.get("langgraph_node", "")
+    return ""
 
 
 # ── 로그인 (비밀번호 마스킹 로그인 페이지) ──────────────────────────────
@@ -177,28 +191,55 @@ async def on_message(message: cl.Message):
 
 
 async def _run_graph(graph, input_state: dict, config: dict):
-    """그래프 스트림 실행: planner까지 실행 후 interrupt_before executor 에서 멈춤"""
-    thinking_msg = await cl.Message(content="🔍 분석 중...").send()
+    """
+    그래프 스트림 실행: planner까지 실행 후 interrupt_before executor에서 멈춤.
+    - cl.Step으로 계획 수립 과정을 접힌 토글로 표시
+    - planner AIMessageChunk만 result_msg에 실시간 스트리밍
+    """
+    result_msg = await cl.Message(content="").send()
 
     try:
-        async for event in graph.astream(input_state, config=config):
-            node_name = list(event.keys())[0] if event else ""
-            node_output = event.get(node_name, {})
+        async with cl.Step(name="🔍 계획 수립 중...") as plan_step:
+            plan_step.output = ""
 
-            # Planner 직접 답변 (Tool 없는 경우)
-            if node_name == "planner" and not node_output.get("pending_tool_calls"):
-                messages = node_output.get("messages", [])
-                if messages:
-                    content = getattr(messages[-1], "content", "")
-                    if content:
-                        print(f"[Planner] 직접 답변: {content[:100]}")
-                        await _update_msg(thinking_msg, content)
+            async for mode, payload in graph.astream(
+                input_state, config=config, stream_mode=["messages", "updates"]
+            ):
+                if mode == "messages":
+                    if isinstance(payload, tuple) and len(payload) == 2:
+                        msg_chunk, metadata = payload
+                    else:
+                        msg_chunk, metadata = payload, {}
 
-            # Planner가 Tool 호출 계획 수립
-            if node_name == "planner" and node_output.get("pending_tool_calls"):
-                plan = node_output.get("plan", "")
-                print(f"[Planner] Tool 계획:\n{plan}")
-                await _update_msg(thinking_msg, f"📋 실행 계획:\n```\n{plan}\n```")
+                    node = _get_node_from_metadata(metadata)
+                    chunk_content = getattr(msg_chunk, "content", "")
+                    if node == "planner" and isinstance(msg_chunk, AIMessageChunk) and chunk_content:
+                        await result_msg.stream_token(chunk_content)
+
+                elif mode == "updates":
+                    event = payload if isinstance(payload, dict) else {}
+                    node_name = list(event.keys())[0] if event else ""
+                    raw_output = event.get(node_name, {})
+                    node_output = dict(raw_output) if isinstance(raw_output, dict) else {}
+
+                    if node_name == "planner":
+                        if node_output.get("pending_tool_calls"):
+                            plan = node_output.get("plan", "")
+                            print(f"[Planner] Tool 계획:\n{plan}")
+                            plan_step.name = "📋 실행 계획"
+                            plan_step.output = plan
+                        else:
+                            plan_step.name = "✅ 분석 완료"
+                            # 스트리밍이 없었으면 fallback으로 한번에 출력
+                            if not result_msg.content:
+                                msgs = node_output.get("messages", [])
+                                if msgs:
+                                    content = getattr(msgs[-1], "content", "")
+                                    if content:
+                                        print(f"[Planner] 직접 답변: {content[:100]}")
+                                        await _update_msg(result_msg, content)
+
+        await result_msg.update()
 
         # 스트림 완료 후 interrupt 여부 확인
         snapshot = graph.get_state(config)
@@ -206,7 +247,7 @@ async def _run_graph(graph, input_state: dict, config: dict):
             await _show_approval_ui(graph, config, snapshot)
 
     except Exception as e:
-        await _update_msg(thinking_msg, f"❌ 오류: {type(e).__name__}: {e}")
+        await _update_msg(result_msg, f"❌ 오류: {type(e).__name__}: {e}")
 
 
 async def _show_approval_ui(graph, config: dict, snapshot):
@@ -239,51 +280,97 @@ async def _show_approval_ui(graph, config: dict, snapshot):
     decision = "approved" if is_approved else "rejected"
     print(f"[Approval] 최종 결정: {decision}")
 
+    # ── 거절 ────────────────────────────────────────────────────────────
     if decision == "rejected":
         pending_now = graph.get_state(config).values.get("pending_tool_calls", [])
         _inject_abort_tool_messages(graph, config, pending_now)
-        result_msg = await cl.Message(content="❌ 거절됨 — 대안 답변 생성 중...").send()
+        result_msg = await cl.Message(content="").send()
         try:
-            async for event in graph.astream(None, config=config):
-                node_name = list(event.keys())[0] if event else ""
-                node_output = event.get(node_name, {})
-                if node_name == "planner" and not node_output.get("pending_tool_calls"):
-                    messages = node_output.get("messages", [])
-                    if messages:
-                        content = getattr(messages[-1], "content", "")
-                        if content:
-                            await _update_msg(result_msg, content)
+            async for mode, payload in graph.astream(None, config=config, stream_mode=["messages", "updates"]):
+                if mode == "messages":
+                    if isinstance(payload, tuple) and len(payload) == 2:
+                        msg_chunk, metadata = payload
+                    else:
+                        msg_chunk, metadata = payload, {}
+                    node = _get_node_from_metadata(metadata)
+                    chunk_content = getattr(msg_chunk, "content", "")
+                    if node == "planner" and isinstance(msg_chunk, AIMessageChunk) and chunk_content:
+                        await result_msg.stream_token(chunk_content)
+
+                elif mode == "updates":
+                    event = payload if isinstance(payload, dict) else {}
+                    node_name = list(event.keys())[0] if event else ""
+                    raw_output = event.get(node_name, {})
+                    node_output = dict(raw_output) if isinstance(raw_output, dict) else {}
+                    if node_name == "planner" and not node_output.get("pending_tool_calls"):
+                        if not result_msg.content:
+                            msgs = node_output.get("messages", [])
+                            if msgs:
+                                content = getattr(msgs[-1], "content", "")
+                                if content:
+                                    await _update_msg(result_msg, content)
+
+            await result_msg.update()
         except Exception as e:
             await _update_msg(result_msg, f"❌ 오류: {type(e).__name__}: {e}")
         return
 
-    # 승인: executor 정상 실행
-    result_msg = await cl.Message(content="✅ 승인됨 — Tool 실행 중...").send()
+    # ── 승인: executor 정상 실행 ────────────────────────────────────────
+    result_msg = await cl.Message(content="").send()
+
     try:
-        async for event in graph.astream(None, config=config):
-            node_name = list(event.keys())[0] if event else ""
-            node_output = event.get(node_name, {})
+        async with cl.Step(name="⚙️ 도구 실행 중...") as exec_step:
+            # Step 내용: 어떤 도구를 실행하는지 미리 표시
+            exec_step.output = "\n".join(
+                f"• {tc['name']}({json.dumps(tc['args'], ensure_ascii=False)})"
+                for tc in pending
+            )
 
-            if node_name == "executor":
-                print(f"[Executor] tool_messages: {[getattr(m, 'tool_call_id', '?') for m in node_output.get('messages', [])]}")
+            async for mode, payload in graph.astream(None, config=config, stream_mode=["messages", "updates"]):
+                if mode == "messages":
+                    if isinstance(payload, tuple) and len(payload) == 2:
+                        msg_chunk, metadata = payload
+                    else:
+                        msg_chunk, metadata = payload, {}
+                    node = _get_node_from_metadata(metadata)
+                    chunk_content = getattr(msg_chunk, "content", "")
+                    if node == "planner" and isinstance(msg_chunk, AIMessageChunk) and chunk_content:
+                        await result_msg.stream_token(chunk_content)
 
-            if node_name == "planner" and not node_output.get("pending_tool_calls"):
-                messages = node_output.get("messages", [])
-                if messages:
-                    content = getattr(messages[-1], "content", "")
-                    if content:
-                        print(f"[Planner2] 최종 답변: {content[:200]}")
-                        await _update_msg(result_msg, content)
+                elif mode == "updates":
+                    event = payload if isinstance(payload, dict) else {}
+                    node_name = list(event.keys())[0] if event else ""
+                    raw_output = event.get(node_name, {})
+                    node_output = dict(raw_output) if isinstance(raw_output, dict) else {}
 
-            # 연속 Tool 호출이 필요한 경우
-            if node_name == "planner" and node_output.get("pending_tool_calls"):
-                plan = node_output.get("plan", "")
-                print(f"[Planner2] 연속 Tool 계획:\n{plan}")
-                await _update_msg(result_msg, f"📋 추가 계획:\n```\n{plan}\n```")
-                new_snapshot = graph.get_state(config)
-                if new_snapshot.next and "executor" in new_snapshot.next:
-                    await _show_approval_ui(graph, config, new_snapshot)
-                break
+                    if node_name == "executor":
+                        tool_ids = [getattr(m, "tool_call_id", "?") for m in node_output.get("messages", [])]
+                        print(f"[Executor] tool_messages: {tool_ids}")
+                        exec_step.name = "✅ 도구 실행 완료"
+
+                    if node_name == "planner":
+                        if node_output.get("pending_tool_calls"):
+                            # 연속 Tool 호출
+                            plan = node_output.get("plan", "")
+                            print(f"[Planner2] 연속 Tool 계획:\n{plan}")
+                            exec_step.name = "✅ 도구 실행 완료"
+                            await result_msg.update()
+
+                            new_snapshot = graph.get_state(config)
+                            if new_snapshot.next and "executor" in new_snapshot.next:
+                                await _show_approval_ui(graph, config, new_snapshot)
+                            break
+                        else:
+                            # 최종 답변 (스트리밍 안됐을 경우 fallback)
+                            if not result_msg.content:
+                                msgs = node_output.get("messages", [])
+                                if msgs:
+                                    content = getattr(msgs[-1], "content", "")
+                                    if content:
+                                        print(f"[Planner2] 최종 답변(fallback): {content[:200]}")
+                                        await _update_msg(result_msg, content)
+
+        await result_msg.update()
 
     except Exception as e:
         print(f"[Error] 승인 후 실행 오류: {type(e).__name__}: {e}")

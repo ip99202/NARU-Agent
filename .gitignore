@@ -6,6 +6,5 @@ __pycache__/
 .venv311/
 venv/
 naru_agent.db
-.chainlit/
 .DS_Store
 **/.DS_Store
