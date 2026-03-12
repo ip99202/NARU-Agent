@@ -113,6 +113,8 @@ async def create_interface_request_step1(
 ) -> dict:
     """
     인터페이스 신청서의 Step1 기초정보를 임시저장합니다.
+    
+    [중요] 호출하기 전 사용자에게 입력값을 보여주고 이상이 없는걸 확인후에 실제 post호출을 해야합니다.
 
     반드시 신청 흐름의 첫 번째 단계로 호출해야 합니다.
     성공하면 이후 regTemp/step3 단계에서 사용할 req_num(요청서 고유번호)을 반환합니다.
@@ -272,6 +274,9 @@ async def save_eai_interface_request_regtemp(
 ) -> dict:
     """
     EAI 인터페이스 신청서의 송/수신 서버 정보와 인터페이스 상세정보를 임시저장합니다.
+    
+    [중요] 호출하기 전 사용자에게 입력값을 보여주고 이상이 없는걸 확인후에 실제 post호출을 해야합니다.
+
     반드시 create_interface_request_step1 호출 후 획득한 req_num을 사용해야 합니다.
 
     ──────────────────────────────────────────────────────────
@@ -501,6 +506,9 @@ async def save_interface_request_step3(
 ) -> dict:
     """
     인터페이스 신청서의 Step3 최종 승인자를 설정하고 임시저장합니다.
+    
+    [중요] 호출하기 전 사용자에게 입력값을 보여주고 이상이 없는걸 확인후에 실제 post호출을 해야합니다.
+
     신청 흐름의 마지막 단계입니다 (step1 → regTemp → step3).
 
     승인자 userId는 search_chargr 툴로 조회할 수 있습니다.
@@ -865,6 +873,9 @@ async def save_eigw_interface_request_regtemp(
 ) -> dict:
     """
     EIGW 인터페이스 신청서의 온라인(ONLINE) 및 파일(FILE) 연동 상세정보를 임시저장합니다.
+    
+    [중요] 호출하기 전 사용자에게 입력값을 보여주고 이상이 없는걸 확인후에 실제 post호출을 해야합니다.
+
     (내부 동작으로 담당자 상세 정보는 userId와 chrgrTyp을 바탕으로 자동 조회되어 채워집니다.)
 
     ──────────────────────────────────────────────────────────
@@ -1139,4 +1150,263 @@ async def get_eigw_interface_request_if_list(req_num: str) -> dict:
     return {
         "online_list": [_parse_online(o) for o in o_list],
         "file_list":   [_parse_file(f) for f in f_list],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. 기존 신청서 목록 검색 (참고용)
+# ─────────────────────────────────────────────────────────────────────────────
+@mcp.tool()
+async def search_interface_request_list(
+    req_title: str = "",
+    if_kind: str = "",
+    page_no: int = 1,
+    size: int = 10,
+) -> dict:
+    """
+    기존에 신청했던 인터페이스 신청서 목록을 검색합니다.
+    신청서 작성 시 이전에 제출한 유사한 신청서를 찾아 참고하기 위해 사용합니다.
+
+    검색 결과에서 참고할 신청서를 선택한 뒤,
+    get_interface_request_detail_for_reference 툴에 req_num을 전달하면
+    해당 신청서의 상세 정보를 한 번에 가져올 수 있습니다.
+
+    Args:
+        req_title: 신청서 제목 키워드 (부분 일치, 생략 시 전체 검색)
+        if_kind:   인터페이스 종류 필터 - \"EAI\" | \"EIGW\" | \"MCG\" | \"\" (전체)
+        page_no:   페이지 번호 (기본 1)
+        size:      페이지 당 항목 수 (기본 10, 최대 20)
+
+    Returns:
+        total_count (int): 전체 신청서 수
+        page_count (int): 전체 페이지 수
+        page_no (int): 현재 페이지
+        req_list (list): 신청서 목록
+            - req_num (str): 요청서 고유번호 (상세조회 시 사용)
+            - req_title (str): 신청서 제목
+            - if_kind (str): 인터페이스 종류 (EAI/EIGW/MCG)
+            - req_typ (str): 신청 유형 (NEW/CHG)
+            - proc_nm (str): 처리 상태명 (임시저장/승인요청 등)
+            - req_purp (str): 신청 목적
+            - req_rmk (str): 비고
+            - reqr_nm (str): 신청자 이름
+            - aprv_nm (str): 승인자 이름
+            - req_dtm (str): 신청 일시
+            - dvlp_aply_req_dt (str): 개발 반영 예정일
+            - oper_aply_req_dt (str): 운영 반영 예정일
+    """
+    session = await get_session()
+
+    # 검색 기간: 최근 3년치 (충분히 넓게)
+    from datetime import date
+    today = date.today()
+    start_dt = today.replace(year=today.year - 3).strftime("%Y%m%d")
+    end_dt = today.strftime("%Y%m%d")
+
+    # if_kind 필터 파라미터 구성 (콤보박스 형태로 각각 전달)
+    eai_val  = "EAI"  if (not if_kind or if_kind == "EAI")  else ""
+    eigw_val = "EIGW" if (not if_kind or if_kind == "EIGW") else ""
+    mcg_val  = "MCG"  if (not if_kind or if_kind == "MCG")  else ""
+
+    params = {
+        "pageNo":        page_no,
+        "size":          min(size, 20),
+        "reqTitle":      req_title,
+        "procSt":        "",
+        "reqrNm":        "",
+        "aprvNm":        "",
+        "srchType":      "",
+        "srchIfKind1":   eai_val,
+        "srchIfKind2":   eigw_val,
+        "srchIfKind3":   mcg_val,
+        "startReqDtm":   start_dt,
+        "endReqDtm":     end_dt,
+        "delYn":         "N",
+    }
+
+    resp = await session.get("/api/ifreq/list", params=params)
+    resp.raise_for_status()
+    body = resp.json()
+
+    if body.get("rstCd") != "S":
+        return {"error": body.get("rstMsg", "신청서 목록 조회 실패")}
+
+    data     = body.get("rstData", {})
+    items    = data.get("ifReqMstList", [])
+    page_set = data.get("pageSet", {})
+
+    req_list = [
+        {
+            "req_num":          m.get("reqNum"),
+            "req_title":        m.get("reqTitle"),
+            "if_kind":          m.get("ifKind"),
+            "req_typ":          m.get("reqTyp"),
+            "proc_nm":          m.get("procNm"),
+            "req_purp":         m.get("reqPurp"),
+            "req_rmk":          m.get("reqRmk"),
+            "reqr_nm":          m.get("reqrNm"),
+            "aprv_nm":          m.get("aprvNm"),
+            "req_dtm":          m.get("reqDtm"),
+            "dvlp_aply_req_dt": m.get("dvlpAplyReqDtF"),
+            "oper_aply_req_dt": m.get("operAplyReqDtF"),
+        }
+        for m in items
+    ]
+
+    return {
+        "total_count": page_set.get("totalRowCount", len(items)),
+        "page_count":  page_set.get("pageCount", 1),
+        "page_no":     page_set.get("pageNo", page_no),
+        "req_list":    req_list,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. 참고 신청서 상세정보 일괄 조회
+# ─────────────────────────────────────────────────────────────────────────────
+@mcp.tool()
+async def get_interface_request_detail_for_reference(req_num: str) -> dict:
+    """
+    신청서 고유번호(req_num)로 해당 신청서의 모든 상세정보를 한 번에 조회합니다.
+    신규 신청서 작성 시 과거 신청서를 참고하여 정보를 재사용할 때 사용합니다.
+
+    search_interface_request_list로 참고할 신청서를 선택한 뒤 이 툴을 호출하세요.
+    if_kind가 EAI이면 서버 목록 + 인터페이스 목록을,
+    if_kind가 EIGW이면 온라인/파일 인터페이스 목록을 포함하여 반환합니다.
+
+    Args:
+        req_num: 요청서 고유번호 (예: \"260310-0001\")
+
+    Returns:
+        step1 (dict): 기초정보 (제목, 신청목적, 날짜, 신청종류 등)
+        eai_detail (dict | None): EAI 신청서인 경우 서버목록 + 인터페이스 목록
+            - svr_list (list): 송신/수신 서버 목록
+            - if_list (list): MQ/FILE 인터페이스 목록
+        eigw_detail (dict | None): EIGW 신청서인 경우 온라인/파일 인터페이스 목록
+            - online_list (list): 온라인 인터페이스 목록
+            - file_list (list): 파일 인터페이스 목록
+    """
+    session = await get_session()
+
+    # ── Step1 기초정보 조회 ───────────────────────────────────────────────────
+    resp1 = await session.get("/api/ifreq/detail/step1", params={"reqNum": req_num})
+    resp1.raise_for_status()
+    body1 = resp1.json()
+
+    if body1.get("rstCd") != "S":
+        return {"error": body1.get("rstMsg", "step1 조회 실패")}
+
+    m: dict = body1.get("rstData", {}).get("ifReqMst", {})
+    step1 = {
+        "req_num":          m.get("reqNum"),
+        "req_title":        m.get("reqTitle"),
+        "req_purp":         m.get("reqPurp"),
+        "req_rmk":          m.get("reqRmk"),
+        "if_kind":          m.get("ifKind"),
+        "req_typ":          m.get("reqTyp"),
+        "proc_nm":          m.get("procNm"),
+        "dvlp_aply_req_dt": m.get("dvlpAplyReqDtF"),
+        "oper_aply_req_dt": m.get("operAplyReqDtF"),
+        "open_req_dt":      m.get("openReqDtF"),
+        "req_dtm":          m.get("reqDtm"),
+        "reqr_nm":          m.get("reqrNm"),
+        "aprv_nm":          m.get("aprvNm"),
+    }
+
+    if_kind = step1.get("if_kind", "")
+    eai_detail  = None
+    eigw_detail = None
+
+    # ── EAI: 서버목록 + 인터페이스목록 ──────────────────────────────────────
+    if if_kind == "EAI":
+        # 서버 목록
+        rs = await session.get("/api/eai/regSvrList", params={"reqNum": req_num, "procSt": "1"})
+        rs.raise_for_status()
+        bs = rs.json()
+        svr_items = bs.get("rstData", {}).get("searchList", []) if bs.get("rstCd") == "S" else []
+
+        def _ps(s):
+            return {
+                "snd_rcv_cl": s.get("sndRcvCl"),
+                "svr_typ_cd": s.get("svrTypCd"),
+                "sys_nm":     s.get("sysNm"),
+                "host_nm":    s.get("hostNm"),
+                "v_ip":       s.get("vIp"),
+                "nat_ip":     s.get("natIp"),
+                "etc_ip":     s.get("etcIp"),
+                "os_nm":      s.get("osNm"),
+                "company":    s.get("company"),
+            }
+
+        # 인터페이스 목록
+        ri = await session.get("/api/eai/regIfList", params={"reqNum": req_num, "procSt": "1"})
+        ri.raise_for_status()
+        bi = ri.json()
+        if_items = bi.get("rstData", {}).get("searchList", []) if bi.get("rstCd") == "S" else []
+
+        def _pi(i):
+            return {
+                "eai_if_nm_kor":         i.get("eaiIfNmKor"),
+                "eai_if_nm_eng":         i.get("eaiIfNmEng"),
+                "if_desc":               i.get("ifDesc"),
+                "if_typ_cd":             i.get("ifTypCd"),
+                "if_typ_nm":             i.get("ifTypNm"),
+                "drctn_cd":              i.get("drctnCd"),
+                "drctn_nm":              i.get("drctnNm"),
+                "rcv_op_cd":             i.get("rcvOpCd"),
+                "svc_impt":              i.get("svcImpt"),
+                "snd_mid":               i.get("sndMid"),
+                "rcv_mid":               i.get("rcvMid"),
+                "rcv_tr":                i.get("rcvTr"),
+                "eai_rmk":               i.get("eaiRmk"),
+                # MQ 전용
+                "round_typ_cd":          i.get("roundTypCd"),
+                "round_typ_nm":          i.get("roundTypNm"),
+                "sync_typ_cd":           i.get("syncTypCd"),
+                "sync_typ_nm":           i.get("syncTypNm"),
+                # FILE 전용
+                "file_if_typ_cd":        i.get("fileIfTypCd"),
+                "snd_dir":               i.get("sndDir"),
+                "rcv_dir":               i.get("rcvDir"),
+                "rcv_sh_nm":             i.get("rcvShNm"),
+                "file_op_code":          i.get("fileOpCode"),
+                # 담당자 (ID 포함 — 재사용 시 search_chargr 없이 바로 입력 가능)
+                "snd_chrgr_id1":         i.get("sndChrgrId1"),
+                "snd_chrgr_nm1":         i.get("sndChrgrNm1"),
+                "snd_chrgr_org_nm1":     i.get("sndChrgrOrgNm1"),
+                "snd_chrgr_mngr_id":     i.get("sndChrgrMngrId"),
+                "snd_chrgr_mngr_nm":     i.get("sndChrgrMngrNm"),
+                "snd_chrgr_mngr_org_nm": i.get("sndChrgrMngrOrgNm"),
+                "rcv_chrgr_id1":         i.get("rcvChrgrId1"),
+                "rcv_chrgr_nm1":         i.get("rcvChrgrNm1"),
+                "rcv_chrgr_org_nm1":     i.get("rcvChrgrOrgNm1"),
+                "rcv_chrgr_mngr_id":     i.get("rcvChrgrMngrId"),
+                "rcv_chrgr_mngr_nm":     i.get("rcvChrgrMngrNm"),
+                "rcv_chrgr_mngr_org_nm": i.get("rcvChrgrMngrOrgNm"),
+            }
+
+        eai_detail = {
+            "svr_list": [_ps(s) for s in svr_items],
+            "if_list":  [_pi(i) for i in if_items],
+        }
+
+    # ── EIGW: 온라인 + 파일 인터페이스 목록 ─────────────────────────────────
+    elif if_kind == "EIGW":
+        re = await session.get("/api/eigw/ifReqList", params={"reqNum": req_num, "procSt": "1"})
+        re.raise_for_status()
+        be = re.json()
+
+        if be.get("rstCd") == "S":
+            ed = be.get("rstData", {})
+            eigw_detail = {
+                "online_list": ed.get("onlineList", []),
+                "file_list":   ed.get("fileList", []),
+            }
+        else:
+            eigw_detail = {"online_list": [], "file_list": []}
+
+    return {
+        "step1":       step1,
+        "eai_detail":  eai_detail,
+        "eigw_detail": eigw_detail,
     }
