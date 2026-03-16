@@ -38,11 +38,33 @@ def _weekday_dates_in_month(year: int, month: int, weekday_idx: int) -> list[dat
 
 
 def _week_of_month(d: date) -> int:
-    """해당 날짜가 그 달의 몇 번째 주인지 반환 (1-indexed, 월요일 기준 주 시작)"""
-    first_day = date(d.year, d.month, 1)
-    # 첫 주의 월요일부터 카운트
-    adjusted = d.day + first_day.weekday()  # 첫 날이 무슨 요일인지에 따라 오프셋
-    return (adjusted - 1) // 7 + 1
+    """
+    해당 날짜가 그 달의 몇 번째 주인지 반환 (1-indexed, 월요일 시작)
+    기준: KS A 5201 / ISO 8601 (목요일 포함 기준)
+    - 해당 주의 목요일이 속한 달의 주차로 계산합니다.
+    - 1일이 금/토/일인 경우, 그 주는 이전 달의 마지막 주(0)로 간주될 수 있습니다.
+    - 월말 날짜가 월/화/수에 해당하며 다음 달 목요일을 포함하는 경우, 다음 달 첫째 주(6)로 간주될 수 있습니다.
+    """
+    # 1. 해당 날짜가 속한 주의 목요일을 찾습니다.
+    # d.weekday()는 월=0, 일=6. 목요일은 3.
+    days_to_thursday = 3 - d.weekday()
+    thursday = d + timedelta(days=days_to_thursday)
+    
+    # 2. 그 목요일이 속한 달의 1일을 찾습니다.
+    first_of_month_of_thursday = thursday.replace(day=1)
+    
+    # 3. 그 목요일이 그 달의 몇 번째 목요일인지 계산합니다.
+    # (thursday.day - 1) // 7 + 1
+    week_idx = (thursday.day - 1) // 7 + 1
+    
+    # 만약 입력받은 날짜(d)의 월과 목요일의 월이 다르다면 특수 처리
+    if d.month != thursday.month:
+        if d < thursday: # d는 월초인데 목요일은 이전 달 (d가 금/토/일)
+            return 0
+        else: # d는 월말인데 목요일은 다음 달 (d가 월/화/수)
+            return 6 # 5주차를 넘어가는 다음달 첫주 의미 (필터링에서 제외됨)
+
+    return week_idx
 
 
 @mcp.tool()

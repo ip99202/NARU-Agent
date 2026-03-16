@@ -21,6 +21,7 @@ def _today() -> str:
 async def get_eigw_online_error_list() -> dict:
     """
     현재 시점의 EIGW 온라인 오류 목록 전체를 조회합니다.
+    항상 현재 시점의 오류목록만 조회가 가능하고 이전 시점의 오류는 조회 불가능합니다.
     파라미터 없이 전체 오류를 스냅샷으로 보여주며, 기관(inst_cd)이나
     인터페이스(eai_if_id)로 필터링하는 기능이 없습니다.
 
@@ -129,11 +130,11 @@ async def get_eigw_online_error_graph(
         - "하나카드 오류 확인" → inst_cd='HNCD' 지정
         - "오늘 XX 인터페이스 오류 이력" → query_date + eai_if_id 지정
         - "오늘 XX 기관 오류" → query_date + inst_cd 지정
-        - 전체 현황(필터 없음)은 get_eigw_online_error_list 사용
+        - 특정시점의 EIGW 전체 오류 이력 조회
 
     Args:
-        query_date:  조회 날짜 (YYYYMMDD, 기본=오늘)
-        time:        조회 기준 시각 (HHMM, 예: '2000', 기본=현재)
+        query_date:  조회 날짜 (YYYYMMDD, 기본=오늘, 필수값)
+        time:        조회 기준 시각 (HHMM, 예: '2000', 기본=현재, 필수값)
         interval:    조회 구간 (분, 음수=과거 방향, 기본=-60)
         eai_if_id:   EAI 인터페이스 ID 필터 (예: 'MVS.EGW_KCTT_CUST_INFO_MFF')
         inst_cd:     기관 코드 필터 (예: 'HNCD'=하나카드, 빈 값=전체)

@@ -235,7 +235,9 @@ async def get_statistic_hourly_mcg(
 
     Args:
         stat_date:     조회 날짜 (YYYYMMDD, 기본=오늘)
-        input_keyword: 거래 코드 필터 (예: ZMBRSM0100010_TR05)
+        input_keyword: 거래 코드 필터. 반드시 정확한 dealCd 값(예: ZMBRSM0100010_TR05)을 입력하세요.
+                       "멤버십" 같은 한글 이름이나 키워드는 사용 불가 — 거래코드를 모를 경우
+                       get_mcg_deal_list로 먼저 목록을 조회한 뒤 dealCd를 확인하세요.
         input_op_cd:   운영 코드 필터
         page_no:       페이지 번호
         size:          페이지당 건수
