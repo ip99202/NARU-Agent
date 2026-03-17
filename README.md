@@ -74,13 +74,18 @@ NARU Agent의 가장 큰 특징은 **사용자 실행 승인 (Human-in-the-loop)
 3. 인증 성공 시, 서브 프로세스(stdio)를 통해 `mcp_server/server.py`를 실행하고 MCP 프로토콜을 이용해 가용한 Tool 목록을 불러옵니다. `mcp_client.get_tools()`
 4. 그 후 AzureChatOpenAI 객체에 바인딩되고 LangGraph가 메모리에 로드됩니다.
 
-### 2단계: 요청 분석 및 계획 수립 (`graph/nodes.py - planner`)
-1. 사용자가 질문을 입력하면, 메시지 배열과 함께 LangGraph의 최초 진입 노드인 `planner`가 실행됩니다.
-2. LLM(Azure OpenAI)은 보유하고 있는 Tool들의 Description과 사용자의 질문을 매칭하여 **어떤 Tool을 어떤 파라미터로 호출할지 계획**(Tool Calls)합니다.
-3. Tool Calls가 존재한다면 `pending_tool_calls` State에 보관하고, 그래프의 라우터(`route_after_planner`)는 `need_execution` 엣지를 반환하여 `executor` 노드로 가록 지시합니다.
+### 2단계: 의도 분석 및 도메인 라우팅 (`graph/nodes.py - router_node`)
+1. 사용자가 질문을 입력하면, 경량 LLM 기반의 라우터가 질문을 우선 분석합니다.
+2. 질의 내용을 eai, eigw, mcg, apply 등 관련 도메인 카테고리로 분류하여, 전체 Tool 중 사용할 도구 목록을 사전에 선별(필터링)합니다.
+3. 이를 통해 메인 에이전트가 불필요한 도구를 탐색하지 않고, 질문과 연관된 전문 도구에만 집중하도록 컨텍스트를 최적화합니다.
+
+### 3단계: 도구 호출 계획 수립 (`graph/nodes.py - planner_node`)
+1. 라우터가 선별해 준 도구들만 LLM(Azure OpenAI)에 바인딩(bind_tools)되어 `planner` 노드가 실행됩니다.
+2. LLM은 바인딩된 Tool들의 Description과 사용자의 질문을 매칭하여 **어떤 Tool을 어떤 파라미터로 호출할지 계획**(Tool Calls)합니다.
+3. Tool Calls가 존재한다면 `pending_tool_calls` State에 보관하고, 이후 `executor` 노드로 가도록 지시합니다.
 4. 이때 `graph.py`에 적용된 `interrupt_before=["executor"]` 설정 때문에, **실제 실행 노드에 진입하기 직전 그래프가 멈춥니다(Interrupt).**
 
-### 3단계: 사용자 승인 대기 (`app.py - _ask_approval`)
+### 4단계: 사용자 승인 대기 (`app.py - _ask_approval`)
 1. 앱은 멈춘 위치를 감지하고, `cl.AskActionMessage`를 띄워 사용자에게 *어떤 Tool을 실행하려는지* 목록을 보여주며 승인(Approve) 혹은 거절(Reject)을 요구합니다.
 2. **승인할 경우:** 
    - 중단됐던 그래프를 `None` 입력으로 재개(`Command(resume=None)`)합니다. 
@@ -89,12 +94,12 @@ NARU Agent의 가장 큰 특징은 **사용자 실행 승인 (Human-in-the-loop)
    - `_inject_abort_tool_messages` 함수를 통해 `ToolMessage(content="사용자 거절")` 형태의 가짜 메시지(Synthetic Message)를 State에 강제로 밀어 넣습니다.
    - LLM에서 에러가 나지 않도록 시퀀스를 맞춘 뒤 `resume`을 수행해 재계획(Re-plan)을 유도합니다.
 
-### 4단계: 도구 실행 및 결과 도출 (`graph/nodes.py - executor`)
-1. 승인받은 경우 `executor` 노드에서 대상 Tool 함수들(예: `get_eigw_online_error_graph`)을 `ainvoke`로 비동기 실행합니다.
+### 5단계: 도구 실행 및 결과 도출 (`graph/nodes.py - executor_node`)
+1. 승인받은 경우 `executor` 노드에서 대상 Tool 함수들을 비동기 실행합니다.
 2. JSON/Dictionary 형식으로 획득된 결과를 문자열로 일차 변환하거나 JSON 포맷 그대로 `ToolMessage`에 감싸서 State에 반환합니다.
 3. 그래프는 자동으로 `planner` 로 노드를 순환(루프백)합니다.
 4. `planner`는 실행된 결과를 컨텍스트로 읽고 **최종 자연어 답변을 구성**하거나 **추가 Tool 조회가 필요한지 2차 판단**을 내립니다.
-5. `planner`에서 더 이상 `tool_calls`가 반환되지 않으면 (`final_answer`), Chainlit UI를 통해 최종 결론이 스트리밍 모드로 출력되며 한 사이클이 종료됩니다.
+5. `planner`에서 더 이상 `tool_calls`가 반환되지 않으면, Chainlit UI를 통해 최종 결론이 스트리밍 모드로 출력되며 한 사이클이 종료됩니다.
 
 ---
 

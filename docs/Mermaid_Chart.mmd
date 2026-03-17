@@ -1,0 +1,40 @@
+flowchart TD
+    USER(["사용자 입력"])
+    START(["Start"])
+
+    subgraph LG["LangGraph (Orchestrator)"]
+        ROUTER["Router Node<br/>(도메인 분류 & 도구 선택)"]
+        PLANNER["Planner Node<br/>(의도 파악 & 계획 수립)"]
+        COND{{"분기점<br/>(Conditional Edge)"}}
+        APPROVAL["Human Approval Node<br/>(사용자 승인 대기)"]
+        EXECUTOR["Executor Node<br/>(MCP 도구 실행)"]
+    end
+
+    subgraph EXT["External System"]
+        MCP["MCP Server<br/>(NARU API 호출)"]
+    end
+
+    END_NODE(["End / 답변 출력"])
+
+    USER --> START
+    START --> ROUTER
+    ROUTER -->|"카테고리 분류 (eai/eigw/mcg/apply/all)"| PLANNER
+    PLANNER -->|"현재 상태 분석"| COND
+    COND -->|"승인 필요 (Need Approval)"| APPROVAL
+    COND -->|"답변 완료 (Final Answer)"| END_NODE
+    APPROVAL -->|"승인 (Yes)"| EXECUTOR
+    APPROVAL -->|"거절/수정 (No)"| PLANNER
+    EXECUTOR -->|"실행 결과 전달"| PLANNER
+    EXECUTOR <-->|"API 요청 / 결과 반환"| MCP
+
+    style ROUTER fill:#e8f4fd,stroke:#2196F3,stroke-width:2px,color:#000
+    style PLANNER fill:#fce4ec,stroke:#E91E63,stroke-width:2px,color:#000
+    style COND fill:#fff8e1,stroke:#FF9800,stroke-width:2px,color:#000
+    style APPROVAL fill:#f3e5f5,stroke:#9C27B0,stroke-width:2px,color:#000
+    style EXECUTOR fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px,color:#000
+    style MCP fill:#fff3e0,stroke:#FF5722,stroke-width:2px,color:#000
+    style LG fill:#f5f5f5,stroke:#1565C0,stroke-width:2px
+    style EXT fill:#fafafa,stroke:#E53935,stroke-width:2px
+    style USER fill:#ffffff,stroke:#9C27B0,stroke-width:2px,color:#000
+    style START fill:#ffffff,stroke:#1565C0,stroke-width:2px,color:#000
+    style END_NODE fill:#ffffff,stroke:#1565C0,stroke-width:2px,color:#000

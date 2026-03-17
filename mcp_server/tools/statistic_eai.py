@@ -40,6 +40,8 @@ async def get_statistic_hourly_eai(
     특정 날짜의 EAI 인터페이스별 시간대(0~23시)별 트랜잭션 통계를 조회합니다.
     특정 인터페이스(inputKeyword)로 필터링하여 트래픽 패턴을 분석합니다.
 
+    ⚠️ 주의: 이 툴은 전체 트랜잭션 건수만 반환하며, 오류(에러) 건수나 내역을 조회할 수 없습니다. 
+
     Args:
         stat_date:     조회 날짜 (YYYYMMDD, 기본=오늘)
         input_keyword: 인터페이스 ID 또는 키워드 필터 (예: EGW.MVNO_KAIT_MYDATA_MAU)
@@ -126,6 +128,8 @@ async def get_statistic_daily_eai(
     특정 월의 EAI 인터페이스별 일자(1~31일)별 트랜잭션 통계를 조회합니다.
     월 단위 트래픽 추이 및 특정 일자의 이상 급증을 분석합니다.
 
+    ⚠️ 주의: 이 툴로는 오류(에러) 건수나 오류 내역을 조회할 수 없습니다. 전체 트랜잭션 건수만 제공됩니다.
+
     Args:
         stat_date:     조회 연월 (YYYYMM, 기본=이번 달)
         input_keyword: 인터페이스 ID 또는 키워드 필터 (예: EGW.MVNO_KAIT_MYDATA_MAU)
@@ -207,6 +211,8 @@ async def get_statistic_monthly_eai(
     """
     특정 연도의 EAI 인터페이스별 월(1~12월)별 트랜잭션 통계를 조회합니다.
     연간 트래픽 추이 및 계절성 분석에 사용합니다.
+
+    ⚠️ 주의: 이 툴로는 오류(에러) 건수나 오류 내역을 조회할 수 없습니다. 전체 트랜잭션 건수만 제공됩니다.
 
     Args:
         stat_date:     조회 연도 (YYYY, 기본=올해)

@@ -66,6 +66,9 @@ SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 1. (권한 한계) NARU 에이전트는 신청 프로세스에서 '임시저장'까지만 기능을 수행할 수 있습니다. 사용자에게 답변할 때 실제 신청을 완료해주거나 다음 결재를 진행해준다는 식의 표현을 절대 사용하지 마세요. 항상 "임시저장 상태로 준비해드릴 수 있습니다"와 같이 한계를 명확히 설명하세요.
 2. (신청 완결성) 인터페이스 신청(EAI, EIGW, MCG)은 기초정보(Step 1), 상세정보(regTemp), 최종 승인자(Step 3)의 3단계 임시저장 과정으로 구성됩니다. 신청 프로세스가 시작되면 반드시 최종 단계인 Step 3까지 모두 완료하도록 안내하고 실행하세요. 중간 과정에서 멈추지 말고 사용자에게 필요한 정보를 물어봐서라도 마지막 단계까지 도달해야 합니다.
 
+[용어 해석 규칙 - 반드시 준수]
+- 사용자가 질의에서 "MQ"라고 언급하면 이는 "EAI MQ"를 의미합니다. MCG 툴을 호출하지 말고 EAI 관련 툴(모니터링, 통계 등)을 사용하세요.
+
 [답변 형식 제약사항 - 반드시 준수]
 - 숫자나 시간, 기간 범위를 나타낼 때 물결표(~) 대신 하이픈(-)을 사용하거나 'A부터 B까지'의 텍스트 형태로 출력하세요. (물결표는 취소선 마크다운으로 오인될 수 있습니다.)"""
 
@@ -147,7 +150,7 @@ async def on_chat_start():
         api_version=AZURE_OPENAI_API_VERSION,
         temperature=0,
     )
-    graph = build_graph(llm_with_tools=llm.bind_tools(tools), tools_map=tools_map)
+    graph = build_graph(llm=llm, tools_map=tools_map)
 
     thread_id = cl.context.session.id
     cl.user_session.set("graph", graph)

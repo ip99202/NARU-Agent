@@ -25,3 +25,8 @@ class AgentState(TypedDict):
 
     # planner-executor 루프 횟수 — 무한루프 방지에 사용
     iteration_count: int
+
+    # 시맨틱 라우터가 선택한 도구 이름 목록
+    # - router_node 실행 시 덮어씀 → 자동 초기화
+    # - executor → planner 루프백 구간에서는 router를 통과하지 않으므로 그대로 유지
+    selected_tools: list

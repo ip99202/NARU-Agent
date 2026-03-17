@@ -1,0 +1,19 @@
+{
+  "query": "현재 기준으로 EIGW 오류가 가장 많은 인터페이스의 저번주 월요일 시간대별 호출량을 표로 정리해줘",
+  "results": [
+    {
+      "label": "현재 (라우터 없음, 전체 도구)",
+      "total_elapsed_sec": 15.833,
+      "tools_bound": 39,
+      "llm_call_count": 4,
+      "total_input_tokens": 73712,
+      "total_output_tokens": 211,
+      "tools_called": [
+        "get_eigw_online_error_list",
+        "get_date_range",
+        "get_statistic_hourly_eigw"
+      ],
+      "error": ""
+    }
+  ]
+}

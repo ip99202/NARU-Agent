@@ -43,6 +43,9 @@ async def get_statistic_hourly_eigw(
     기관(instCd) 단위로 집계되며, inputKeyword로 특정 인터페이스를 필터링할 수 있습니다.
     ※ EAI 통계(get_statistic_hourly_eai)와 달리 ifNm 필드는 제공되지 않습니다.
 
+    ⚠️ 주의: 이 툴은 전체 트랜잭션 건수만 반환하며, 오류(에러) 건수나 내역을 조회할 수 없습니다. 
+    "시간대별 오류 현황"이나 특정 기간의 시점별 오류 내역을 원할 경우 `get_eigw_online_error_graph`를 사용하세요.
+
     Args:
         stat_date:      조회 날짜 (YYYYMMDD, 기본=오늘)
         inst_cd:        기관 코드 필터 (예: HNCD, 없으면 전체)
@@ -129,6 +132,8 @@ async def get_statistic_daily_eigw(
     기관(instCd) 단위로 집계됩니다. 이상 일자 탐지나 월 단위 기관별 트래픽 비교에 사용합니다.
     ※ 이 함수의 응답에는 ifId, ifNm 필드가 포함되지 않습니다.
 
+    ⚠️ 주의: 이 툴로는 오류(에러) 건수나 오류 내역을 조회할 수 없습니다. 전체 트랜잭션 건수만 제공됩니다.
+
     Args:
         stat_date:      조회 연월 (YYYYMM, 기본=이번 달)
         inst_cd:        기관 코드 필터 (예: HNCD)
@@ -212,6 +217,8 @@ async def get_statistic_monthly_eigw(
     특정 연도의 EIGW 기관별 월(1~12월)별 트랜잭션 통계를 조회합니다.
     기관(instCd) 단위로 집계됩니다. 연간 기관별 트래픽 추이 및 계절성 분석에 사용합니다.
     ※ 이 함수의 응답에는 ifId, ifNm 필드가 포함되지 않습니다.
+
+    ⚠️ 주의: 이 툴로는 오류(에러) 건수나 오류 내역을 조회할 수 없습니다. 전체 트랜잭션 건수만 제공됩니다.
 
     Args:
         stat_date:      조회 연도 (YYYY, 기본=올해)
