@@ -19,6 +19,7 @@ app.py — Chainlit 진입점 (NARU Agent UI)
   - "updates" 이벤트는 cl.Step으로 "계획 수립"/"도구 실행" 과정을 접힌 토글로 표시
 """
 import json
+import logging
 
 import chainlit as cl
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessageChunk
@@ -33,6 +34,14 @@ from config import (
 )
 from graph.graph import build_graph
 from mcp_server.tools.auth import login
+
+# ── 로깅 초기화 ──────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("naru.app")
 
 
 def _build_mcp_config(naru_user_id: str, naru_user_pw: str) -> dict:
@@ -70,7 +79,8 @@ SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 - 사용자가 질의에서 "MQ"라고 언급하면 이는 "EAI MQ"를 의미합니다. MCG 툴을 호출하지 말고 EAI 관련 툴(모니터링, 통계 등)을 사용하세요.
 
 [답변 형식 제약사항 - 반드시 준수]
-- 숫자나 시간, 기간 범위를 나타낼 때 물결표(~) 대신 하이픈(-)을 사용하거나 'A부터 B까지'의 텍스트 형태로 출력하세요. (물결표는 취소선 마크다운으로 오인될 수 있습니다.)"""
+- 숫자나 시간, 기간 범위를 나타낼 때 물결표(~) 대신 하이픈(-)을 사용하거나 'A부터 B까지'의 텍스트 형태로 출력하세요. (물결표는 취소선 마크다운으로 오인될 수 있습니다.)
+"""
 
 
 async def _update_msg(msg: cl.Message, new_content: str):
@@ -153,6 +163,7 @@ async def on_chat_start():
     graph = build_graph(llm=llm, tools_map=tools_map)
 
     thread_id = cl.context.session.id
+    cl.user_session.set("mcp_client", mcp_client)
     cl.user_session.set("graph", graph)
     cl.user_session.set("thread_id", thread_id)
 
@@ -247,9 +258,23 @@ async def _stream_graph(
 
             elif node_name == "planner":
                 if node_output.get("pending_tool_calls"):
-                    plan = node_output.get("plan", "")
-                    print(f"[{planner_label.capitalize()}] Tool 계획:\n{plan}")
-                    plan_info = {"plan": plan, "has_pending": True}
+                    # current_plan(구조화된 리스트) 우선, 없으면 plan 문자열 fallback
+                    current_plan = node_output.get("current_plan", [])
+                    if current_plan:
+                        plan_lines = [
+                            f"Step {p['step']}: `{p['tool']}`  "
+                            f"{json.dumps(p['args'], ensure_ascii=False)}"
+                            for p in current_plan
+                        ]
+                        plan_text = "\n".join(plan_lines)
+                    else:
+                        plan_text = node_output.get("plan", "")
+                    logger.info(
+                        "[App/%s] Tool 계획 수립 | steps=%d",
+                        planner_label, len(current_plan),
+                    )
+                    print(f"[{planner_label.capitalize()}] Tool 계획:\n{plan_text}")
+                    plan_info = {"plan": plan_text, "has_pending": True}
                     if step_ctx:
                         step_ctx.name = "✅ 도구 실행 완료"
                 else:
@@ -262,6 +287,10 @@ async def _stream_graph(
                         if msgs:
                             content = getattr(msgs[-1], "content", "")
                             if content:
+                                logger.info(
+                                    "[App/%s] 직접 답변 | len=%d",
+                                    planner_label, len(content),
+                                )
                                 print(f"[{planner_label.capitalize()}] 직접 답변: {content[:100]}")
                                 final_answer_content = content
 

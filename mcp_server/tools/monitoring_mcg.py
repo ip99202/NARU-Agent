@@ -172,7 +172,7 @@ async def get_mcg_out_tps_status(
     Args:
         query_date:  조회 날짜 (YYYYMMDD, 기본=오늘)
         time:        조회 기준 시각 (HHMM, 예: '2258')
-        interval:    조회 구간 (분, 음수=과거 방향, 기본=-120)
+        interval:    조회 구간 (분, 예: '-120' = 조회기준 시각 -120분 ~ 조회기준 시각, 필수값, 항상 음수값)
         op_cd:       업무 코드 필터 (예: '1011')
         chnl_id:     채널 ID 필터 (예: 'EST')
         page_no:     페이지 번호 (기본=1)

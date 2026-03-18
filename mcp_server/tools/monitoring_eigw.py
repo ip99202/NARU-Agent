@@ -135,7 +135,7 @@ async def get_eigw_online_error_graph(
     Args:
         query_date:  조회 날짜 (YYYYMMDD, 기본=오늘, 필수값)
         time:        조회 기준 시각 (HHMM, 예: '2000', 기본=현재, 필수값)
-        interval:    조회 구간 (분, 음수=과거 방향, 기본=-60)
+        interval:    조회 구간 (분, 예: '-60' = 조회기준 시각 -60분 ~ 조회기준 시각, 필수값, 항상 음수값)
         eai_if_id:   EAI 인터페이스 ID 필터 (예: 'MVS.EGW_KCTT_CUST_INFO_MFF')
         inst_cd:     기관 코드 필터 (예: 'HNCD'=하나카드, 빈 값=전체)
         input_conf:  설정 코드 필터 (빈 값=전체)
@@ -250,7 +250,7 @@ async def get_eigw_online_trms_cnt_list(
     Args:
         query_date:  조회 날짜 (YYYYMMDD, 기본=오늘)
         time:        조회 기준 시각 (HHMM, 예: '2222')
-        interval:    조회 구간 (분, 음수=과거 방향, 기본=-30)
+        interval:    조회 구간 (분, 예: '-30' = 조회기준 시각 -30분 ~ 조회기준 시각, 필수값, 항상 음수값)
         eai_if_id:   EAI 인터페이스 ID (예: 'ORD.EGW_KAIT_MLINE_INFO_RGST_MAU')
         inst_cd:     기관 코드 필터 (빈 값=전체)
         input_conf:  설정 코드 필터 (빈 값=전체)
@@ -360,7 +360,7 @@ async def get_eigw_online_elap_list(
     Args:
         query_date:   조회 날짜 (YYYYMMDD, 기본=오늘)
         time:         조회 기준 시각 (HHMM, 빈 값=제한 없음)
-        interval:     조회 구간 (분, 음수=과거 방향, 기본=-60)
+        interval:     조회 구간 (분, 예: '-60' = 조회기준 시각 -60분 ~ 조회기준 시각, 필수값, 항상 음수값)
         eai_if_id:    EAI 인터페이스 ID
         inst_cd:      기관 코드 필터 (빈 값=전체)
         input_conf:   설정 코드 필터 (빈 값=전체)
@@ -499,7 +499,7 @@ async def get_eigw_file_trms_list(
     Args:
         query_date:             조회 날짜 (YYYYMMDD, 기본=오늘)
         time:                   조회 기준 시각 (HHMM, 예: '2230')
-        interval:               조회 구간 (분, 음수=과거 방향, 기본=-30)
+        interval:               조회 구간 (분, 예: '-30' = 조회기준 시각 -30분 ~ 조회기준 시각, 필수값, 항상 음수값)
         eai_if_id:              EAI 인터페이스 ID 필터
         inst_cd:                기관 코드 필터
         file_nm:                파일 이름 필터

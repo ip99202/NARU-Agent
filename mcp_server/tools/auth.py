@@ -10,7 +10,8 @@ NARU API 세션 관리 모듈
 자격증명 전달 방식:
   - app.py가 MultiServerMCPClient에 NARU_USER_ID / NARU_USER_PW 환경변수를 주입
   - MCP 서버 서브프로세스는 os.environ에서 읽어 자동 로그인
-  - 세션 만료(401) 시 자동 재로그인
+  - 세션 만료(401) 수신 시 refresh_session() 호출로 재로그인
+  - get_session()은 probe 없이 즉시 반환 (툴 호출마다 불필요한 HTTP 요청 방지)
 """
 import os
 import httpx
@@ -88,7 +89,8 @@ async def get_session() -> httpx.AsyncClient:
 
     세션이 없으면 환경변수(NARU_USER_ID, NARU_USER_PW)로 자동 로그인합니다.
     환경변수는 app.py가 MultiServerMCPClient 실행 시 주입합니다.
-    세션 만료(401) 시 동일한 환경변수로 자동 재로그인합니다.
+    세션이 있으면 probe 없이 즉시 반환합니다.
+    세션 만료(401) 수신 시 refresh_session()을 호출하세요.
 
     Returns:
         인증된 httpx.AsyncClient
@@ -108,19 +110,33 @@ async def get_session() -> httpx.AsyncClient:
 
     if _session is None:
         _session = await login(user_id, user_pw)
-        return _session
 
-    # 세션 유효성 확인
-    try:
-        probe = await _session.get("/api/bizcomm/chrgr/my", timeout=5.0)
-        if probe.status_code == 401:
-            print("[Auth] 세션 만료 감지 → 재로그인")
-            await _session.aclose()
-            _session = await login(user_id, user_pw)
-    except httpx.RequestError:
-        print("[Auth] 세션 확인 실패 → 재로그인")
-        _session = await login(user_id, user_pw)
+    return _session
 
+
+async def refresh_session() -> httpx.AsyncClient:
+    """세션 만료(401) 수신 시 호출 — 기존 세션을 닫고 재로그인 후 반환합니다.
+
+    Returns:
+        새로 인증된 httpx.AsyncClient
+
+    Raises:
+        RuntimeError: 환경변수 미설정 또는 로그인 실패 시
+    """
+    global _session
+
+    user_id = os.environ.get("NARU_USER_ID", "")
+    user_pw = os.environ.get("NARU_USER_PW", "")
+
+    if not user_id or not user_pw:
+        raise RuntimeError(
+            "NARU 자격증명 환경변수(NARU_USER_ID, NARU_USER_PW)가 설정되지 않았습니다."
+        )
+
+    if _session:
+        await _session.aclose()
+    print("[Auth] 세션 만료 → 재로그인")
+    _session = await login(user_id, user_pw)
     return _session
 
 
