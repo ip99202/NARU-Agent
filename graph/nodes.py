@@ -3,7 +3,7 @@ graph/nodes.py — LangGraph 노드 구현
 
 노드 구성:
   - router_node : 사용자 질문을 도메인(eai/eigw/mcg/apply/all)으로 분류하여
-                  사용할 도구 목록을 state에 기록 (경량 LLM 호출)
+                  사용할 도구 목록을 state에 기록 (최소한의 LLM 호출)
                   매 새 메시지마다 iteration_count / last_plan_signature 리셋
   - planner_node : router가 선택한 도구만 bind_tools한 뒤 의도 파악 및 도구 호출 결정
                    Self-Correction: last_tool_error 기반 수정 힌트 주입
@@ -110,7 +110,7 @@ async def router_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
     """
     사용자 질문을 분석하여 관련 도메인 카테고리를 분류합니다.
 
-    - 최근 HumanMessage를 기반으로 경량 LLM 호출(with_structured_output)을 수행합니다.
+    - 최근 HumanMessage를 기반으로 최소한의 LLM 호출(with_structured_output)을 수행합니다.
     - 분류된 카테고리에 해당하는 도구 이름 목록을 state["selected_tools"]에 저장합니다.
     - 매 새 질의마다 iteration_count / last_plan_signature / error 상태를 리셋합니다.
     - executor → planner 루프백 시에는 이 노드를 거치지 않으므로 선택된 도구가 보존됩니다.
@@ -236,6 +236,10 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
         messages_to_send = state["messages"]
 
     response: AIMessage = await bound_llm.ainvoke(messages_to_send)
+
+    reasoning = (getattr(response, "content", "") or "").strip()
+    if reasoning:
+        logger.info("[Planner] 판단 근거: %s", reasoning[:300])
 
     if response.tool_calls:
         pending = [
@@ -371,7 +375,10 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
                 else:
                     content = str(raw)
                 results_summary.append({"tool": tool_name, "result": content[:200]})
-                logger.info("[Executor] 성공: %s | result_len=%d", tool_name, len(content))
+                logger.info(
+                    "[Executor] 성공: %s | args=%s | result_len=%d",
+                    tool_name, json.dumps(tool_args, ensure_ascii=False), len(content),
+                )
             except Exception as e:
                 error_msg = (
                     f"[TOOL_ERROR] tool={tool_name} | "
@@ -381,7 +388,10 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
                 content = error_msg
                 error_occurred = True
                 last_error_msg = error_msg
-                logger.warning("[Executor] 오류: %s | %s: %s", tool_name, type(e).__name__, e)
+                logger.warning(
+                    "[Executor] 오류: %s | args=%s | %s: %s",
+                    tool_name, json.dumps(tool_args, ensure_ascii=False), type(e).__name__, e,
+                )
 
         tool_messages.append(
             ToolMessage(content=content, tool_call_id=tool_call_id)

@@ -8,3 +8,5 @@ venv/
 naru_agent.db
 .DS_Store
 **/.DS_Store
+docs/out/
+.cursor/

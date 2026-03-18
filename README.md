@@ -105,7 +105,7 @@ NARU Agent의 핵심은 **사용자 실행 승인(Human-in-the-loop)**, **에이
 4. AzureChatOpenAI 객체와 LangGraph가 메모리에 로드됩니다.
 
 ### 2단계: 의도 분석 및 도메인 라우팅 (`graph/nodes.py - router_node`)
-1. 사용자가 질문을 입력하면 경량 LLM 기반의 라우터가 질문을 분석합니다.
+1. 사용자가 질문을 입력하면 LLM 기반의 라우터가 질문을 분석합니다.
 2. 질의 내용을 `eai`, `eigw`, `mcg`, `apply` 도메인으로 분류하여 전체 Tool 중 관련 도구만 선별합니다.
 3. **매 새 메시지마다** `iteration_count`, `error_retries`, `last_plan_signature` 등 루프 관련 상태를 0으로 리셋합니다.
 
