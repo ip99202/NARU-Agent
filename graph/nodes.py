@@ -237,11 +237,11 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
 
     response: AIMessage = await bound_llm.ainvoke(messages_to_send)
 
-    reasoning = (getattr(response, "content", "") or "").strip()
-    if reasoning:
-        logger.info("[Planner] 판단 근거: %s", reasoning[:300])
-
     if response.tool_calls:
+        reasoning = (getattr(response, "content", "") or "").strip()
+        if reasoning:
+            logger.info("[Planner] 판단 근거: %s", reasoning[:300])
+
         pending = [
             {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
             for tc in response.tool_calls
