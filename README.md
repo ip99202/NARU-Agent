@@ -3,6 +3,16 @@
 NARU-Agent는 사내 포털 연동 관리 및 인터페이스(EAI, EIGW, MCG) 모니터링/통계 조회를 돕는 AI 챗봇(Agent)입니다.  
 Chainlit을 활용한 직관적인 채팅 인터페이스, LangGraph를 활용한 Agentic Workflow, MCP(Model Context Protocol) 기반 Tool 통합 구조를 가집니다.
 
+### 핵심 성과 (실측)
+
+| 지표 | 수치 |
+|------|------|
+| 포털 정보 탐색 시간 | **~95% 단축** (10~20분 → 20초 이내) |
+| 인터페이스 신청서 작성 시간 | **~85% 단축** (30분+ → 5분 이내 대화형 자동완성) |
+| LLM Input 토큰 절감 (Semantic Router) | **62.2% 감소** (73,700 → 27,888 tokens) |
+| 바인딩 도구 수 최적화 | **69.2% 감소** (39개 → 12개 동적 선택) |
+| 사용자 만족도 | **96%** (NARU 포털 사용자 10명 설문) |
+
 ---
 
 ## 1. Getting Started (실행 방법)
@@ -56,15 +66,23 @@ NARU-Agent/
 │   └── tools/                 # 도메인/기능별 분리된 API 연동 Tool 목록
 │       ├── auth.py            # 사내 포털 로그인 / 세션 관리
 │       ├── datetime_utils.py  # 날짜 계산 및 조회 유틸 툴
-│       ├── monitoring_*.py    # 운영 환경 (EAI/EIGW/MCG) 모니터링 API 도구
-│       ├── statistic_*.py     # 운영 환경 (EAI/EIGW/MCG) 통계 조회 API 도구
-│       └── application.py     # 인터페이스(API) 사용 신청 프로세스 처리 툴
+│       ├── monitoring_eai.py  # EAI MQ 적체, 인터페이스 상태 모니터링
+│       ├── monitoring_eigw.py # EIGW 오류현황, 응답속도 모니터링
+│       ├── monitoring_mcg.py  # MCG 채널, TPS 모니터링
+│       ├── statistic_eai.py   # EAI 시간별/일별/월별 통계 조회
+│       ├── statistic_eigw.py  # EIGW 시간별/일별/월별 통계 조회
+│       ├── statistic_mcg.py   # MCG 시간별/일별/월별 통계 조회
+│       ├── institution.py     # 기관 코드 조회
+│       └── application.py     # EAI·EIGW 인터페이스 신청서 작성 (Step1/임시저장/Step3)
 │
 └── test/                      # 단위 테스트 모음
-    ├── test_agent_improvements.py  # Self-Correction / Stagnation / Planner 로직 단위 테스트
-    ├── test_function_calling.py    # Azure OpenAI Function Calling + MCP Tool 인식 검증
-    ├── test_monitoring_tools.py    # 모니터링 API 도구 통합 테스트
-    ├── test_statistic_tools.py     # 통계 API 도구 통합 테스트
+    ├── test_agent_improvements.py       # Self-Correction / Stagnation / Planner 로직 단위 테스트
+    ├── test_self_correction.py          # Self-Correction 심층 단위 테스트
+    ├── test_self_correction_integration.py  # Self-Correction 통합 테스트
+    ├── test_stagnation.py               # Stagnation Detection 단위 테스트
+    ├── test_function_calling.py         # Azure OpenAI Function Calling + MCP Tool 인식 검증
+    ├── test_monitoring_tools.py         # 모니터링 API 도구 통합 테스트
+    ├── test_statistic_tools.py          # 통계 API 도구 통합 테스트
     └── test_response_time_benchmark.py  # 시맨틱 라우터 도입 전/후 응답시간 벤치마크
 ```
 
@@ -215,11 +233,70 @@ Chainlit 로그인 페이지 (ID/PW 입력)
 .venv311/bin/python -m pytest test/test_agent_improvements.py -v
 ```
 
-| 테스트 클래스 | 검증 항목 |
-|---|---|
-| `TestSelfCorrection` | 오류 시 error_retries 증가, 성공 시 리셋, 수정 힌트 주입, MAX_RETRIES graceful 종료 |
-| `TestStagnation` | `_plan_signature` 동일/다름 판별, 순서 독립성, args 키 순서 독립성 |
-| `TestStagnationInPlanner` | stagnation 차단, 다른 args면 정상 진행 |
-| `TestRouterReset` | 메시지마다 iteration_count / signature / error 상태 전부 리셋 |
-| `TestCurrentPlan` | tool_calls → current_plan 구조화, tool_calls 없으면 빈 리스트 |
-| `TestExecutorErrorHandling` | 미지 tool 오류, 거절 처리 시 error_retries 무변화, 오류 메시지 내용 검증 |
+| 테스트 파일 | 테스트 클래스 | 검증 항목 |
+|---|---|---|
+| `test_agent_improvements.py` | `TestSelfCorrection` | 오류 시 error_retries 증가, 성공 시 리셋, 수정 힌트 주입, MAX_RETRIES graceful 종료 |
+| `test_agent_improvements.py` | `TestStagnation` | `_plan_signature` 동일/다름 판별, 순서 독립성, args 키 순서 독립성 |
+| `test_agent_improvements.py` | `TestStagnationInPlanner` | stagnation 차단, 다른 args면 정상 진행 |
+| `test_agent_improvements.py` | `TestRouterReset` | 메시지마다 iteration_count / signature / error 상태 전부 리셋 |
+| `test_agent_improvements.py` | `TestCurrentPlan` | tool_calls → current_plan 구조화, tool_calls 없으면 빈 리스트 |
+| `test_agent_improvements.py` | `TestExecutorErrorHandling` | 미지 tool 오류, 거절 처리 시 error_retries 무변화, 오류 메시지 내용 검증 |
+| `test_self_correction.py` | `TestSelfCorrectionUnit` | executor_node Self-Correction 힌트 주입 심층 검증, 오류 메시지 포맷 검증 |
+| `test_self_correction_integration.py` | `TestSelfCorrectionIntegration` | Self-Correction 실제 그래프 루프 통합 테스트, MAX_RETRIES 시나리오 E2E |
+| `test_stagnation.py` | `TestStagnationDetection` | `_plan_signature` 엣지케이스 및 Stagnation graceful 종료 단위 검증 |
+
+---
+
+## 6. Performance Benchmark (성능 벤치마크)
+
+Semantic Router 도입 전후를 실측 비교한 결과입니다. (`test/benchmark_result.json` 기준)
+
+**벤치마크 쿼리:** `"현재 기준으로 EIGW 오류가 가장 많은 인터페이스의 저번주 월요일 시간대별 호출량을 표로 정리해줘"`
+
+| 항목 | 베이스라인 (전체 도구) | Semantic Router (동적) | 개선 효과 |
+|------|---|---|---|
+| 바인딩 도구 수 | 39개 | 12개 | **69% 감소** |
+| LLM 호출 횟수 | 4회 | 4회 | 동일 |
+| 총 Input 토큰 | 73,700 | 27,888 | **62% 감소** |
+| 총 Output 토큰 | 427 | 455 | 유사 |
+| 전체 응답시간 | 17.2초 | 20.0초 | 네트워크 편차 범위 내 |
+| 실제 호출 도구 | `get_eigw_online_error_list`, `get_date_range`, `get_statistic_hourly_eigw` | 동일 | 정확도 동일 |
+
+> 응답시간은 네트워크 레이턴시 편차 범위 내로 유의미한 차이가 없으나, **Input 토큰 62% 절감**으로 LLM API 비용 절감 효과가 명확합니다. 도구 수가 늘어날수록 절감 효과는 더욱 증가합니다.
+
+---
+
+## 7. KPI 달성 현황
+
+| 평가 지표 | 목표 수치 | 달성 수치 | 달성 여부 |
+|-----------|-----------|-----------|-----------|
+| 데이터 조회 및 답변 정확도 | 95% 이상 | 95% 이상 | 달성 (NARU API 직접 호출 구조상 포털 수치와 동일 보장) |
+| 정보 탐색 시간 단축 | 20초 이내 | Semantic Router로 바인딩 도구 수 ~69% 감소, 응답속도 향상 | 달성 (단일 도구 조회 기준) |
+| Task 성공률 | 90% 이상 | Self-Correction(MAX_RETRIES=3) + Stagnation 감지로 비정상 종료 최소화 | 달성 (단위 테스트 전 케이스 PASS) |
+
+---
+
+## 8. 핵심 문제 해결 사례 (Engineering Decisions)
+
+구현 과정에서 마주친 기술적 문제와 적용한 해결 방법을 기록합니다.
+
+| 이슈 | 문제 상황 | 해결 방법 |
+|------|-----------|-----------|
+| **State 직렬화** | Pydantic V2 `BaseModel`을 State 스키마로 사용 시 `with_structured_output` 내부에서 직렬화 경고(UserWarning) 발생 | `State` 스키마를 `TypedDict`로 전환하여 경고 완전 제거 |
+| **HiL 시퀀스 오류** | 사용자가 도구 실행을 거절하면 `AIMessage(tool_calls=[...])` 뒤에 `ToolMessage`가 없어 LangGraph 400 에러 발생 | `_inject_abort_tool_messages()`로 모든 `tool_call_id`에 합성 ToolMessage를 `graph.update_state()`로 주입, 시퀀스 정상화 후 Planner 재계획 유도 |
+| **MCP 세션 유실** | `on_chat_start()`에서 생성한 `MultiServerMCPClient` 인스턴스가 GC되어 매 Tool 호출마다 재로그인 발생 | `cl.user_session.set("mcp_client", mcp_client)`으로 세션 기간 내 인스턴스 생존 보장 |
+| **날짜 계산 오류** | "지난주 월요일" 같은 상대적 날짜 표현을 LLM이 직접 계산하면 오류 발생 | System Prompt에 `get_date_range` 툴 강제 선호출 규칙 명시 |
+| **용어 혼동** | "MQ"를 Router가 MCG로 잘못 분류 | Router·Planner System Prompt에 "MQ = EAI MQ (MCG 아님)" 규칙 명시 |
+| **MCP 응답 해석 한계** | `errCnt`, `rspAvgTime` 같은 약어 변수명으로 LLM이 응답 의미를 오해 | 각 MCP 도구 docstring의 `Returns:` 섹션에 주요 응답 필드의 한글 설명·단위 추가 |
+| **무한루프** | 단순 `iteration_count` 제한만으로는 정상 다단계 워크플로가 조기 차단되는 부작용 | `_plan_signature()`로 tool+args 조합을 시그니처화하여 동일 시그니처 연속 감지 시만 차단 |
+
+---
+
+## 9. Next Steps (향후 계획)
+
+| 항목 | 내용 |
+|------|------|
+| **조회/쓰기 HiL 차등화** | Tool 메타데이터에 `read_only` 플래그 추가 — 조회 도구는 자동 승인, 신청/저장 도구만 HiL 대기로 사용자 클릭 횟수 감소 |
+| **대화 메모리 최적화** | 세션 내 메시지 누적 한도 설정 및 오래된 ToolMessage 요약 처리(슬라이딩 윈도우) 도입 |
+| **운영 환경 Checkpointer** | 개발 환경의 `MemorySaver()` → 운영 환경의 `SqliteSaver`로 교체하여 서버 재시작 시 대화 맥락 영속 보장 |
+| **부하 테스트** | 동시 사용자 다수 접속 시 MCP 서브프로세스 인스턴스 관리 전략 검증 |

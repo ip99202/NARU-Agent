@@ -45,6 +45,9 @@ async def get_statistic_hourly_eai(
     Args:
         stat_date:     조회 날짜 (YYYYMMDD, 기본=오늘)
         input_keyword: 인터페이스 ID 또는 키워드 필터 (예: EGW.MVNO_KAIT_MYDATA_MAU)
+                       ⚠️ get_queue_depth_monitoring에서 얻은 queueNm을 사용할 경우
+                       ".IN" / ".OUT" 접미사를 반드시 제거하고 입력하세요.
+                       (예: "ORD.EGW_KTOA_SKT_INFO_MFF.IN" → "ORD.EGW_KTOA_SKT_INFO_MFF")
         mq_mngr_nm:    큐매니저 이름 필터 (없으면 전체)
         if_typ_cd:     연동 방식 코드 필터 (없으면 전체)
         page_no:       페이지 번호 (기본=1)

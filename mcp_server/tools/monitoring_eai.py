@@ -30,7 +30,11 @@ async def get_queue_depth_monitoring(
         total_queues (int): 전체 큐 수
         over_threshold_count (int): depthCnt > 0 인 적체 큐 수
         top_queues (list): depthCnt 내림차순 상위 20개 큐 목록
-            - queueNm (str): 큐 이름
+            - queueNm (str): 큐 이름. 예: "ORD.EGW_KTOA_SKT_INFO_MFF.IN"
+              ⚠️ queueNm은 끝에 ".IN" 또는 ".OUT" 접미사가 붙습니다.
+              다른 툴(통계 조회 등)에서 인터페이스 ID로 사용할 때는
+              반드시 ".IN" / ".OUT" 접미사를 제거하세요.
+              (예: "ORD.EGW_KTOA_SKT_INFO_MFF.IN" → "ORD.EGW_KTOA_SKT_INFO_MFF")
             - queueManager (str): MQ 매니저 이름
             - depthCnt (int): 현재 큐 메시지 적체 수
             - inQ (int): 인바운드 메시지 수
