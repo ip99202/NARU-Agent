@@ -25,6 +25,7 @@ import chainlit as cl
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessageChunk
 from langchain_openai import AzureChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 from config import (
     AZURE_OPENAI_API_KEY,
@@ -84,7 +85,8 @@ SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 - 예: "ORD.EGW_KTOA_SKT_INFO_MFF.IN" → input_keyword="ORD.EGW_KTOA_SKT_INFO_MFF"
 
 [답변 형식 제약사항 - 반드시 준수]
-- 숫자나 시간, 기간 범위를 나타낼 때 물결표(~) 대신 하이픈(-)을 사용하거나 'A부터 B까지'의 텍스트 형태로 출력하세요. (물결표는 취소선 마크다운으로 오인될 수 있습니다.)
+- 물결표(~)를 절대 사용하지 마세요. 범위 표기는 하이픈(-) 또는 'A부터 B까지' 형태로 쓰세요.
+- ~~취소선~~ 마크다운(~~텍스트~~)도 절대 사용하지 마세요. 강조가 필요하면 **굵게** 또는 따옴표를 쓰세요.
 
 [판단 근거 작성 규칙 - 반드시 준수]
 - 도구를 호출하기 전에 반드시 content에 한 줄로 판단 근거를 먼저 작성하세요.
@@ -93,9 +95,20 @@ SYSTEM_PROMPT = """당신은 NARU 포털 운영 에이전트입니다.
 """
 
 
+import re as _re
+
+def _sanitize_content(text: str) -> str:
+    """물결표(~)를 하이픈(-)으로 치환하여 취소선 마크다운 렌더링 방지."""
+    # ~~취소선~~ → 텍스트만 추출
+    text = _re.sub(r'~~(.+?)~~', r'\1', text)
+    # 단독 ~ (범위 표기 등) → -
+    text = text.replace('~', '-')
+    return text
+
+
 async def _update_msg(msg: cl.Message, new_content: str):
     """Chainlit 2.x 호환 방식으로 메시지 내용 업데이트"""
-    msg.content = new_content
+    msg.content = _sanitize_content(new_content)
     await msg.update()
 
 
@@ -158,9 +171,12 @@ async def on_chat_start():
     init_msg = await cl.Message(content="⏳ NARU Agent 초기화 중...").send()
 
     # 자격증명을 MCP 서브프로세스 환경변수로 주입
+    # session()으로 persistent 서브프로세스를 열어 세션 수명 동안 재로그인 방지
     mcp_config = _build_mcp_config(naru_id, naru_pw)
     mcp_client = MultiServerMCPClient(mcp_config)
-    tools = await mcp_client.get_tools()
+    _session_cm = mcp_client.session("naru")
+    mcp_session = await _session_cm.__aenter__()
+    tools = await load_mcp_tools(mcp_session)
     tools_map = {t.name: t for t in tools}
 
     llm = AzureChatOpenAI(
@@ -173,7 +189,7 @@ async def on_chat_start():
     graph = build_graph(llm=llm, tools_map=tools_map)
 
     thread_id = cl.context.session.id
-    cl.user_session.set("mcp_client", mcp_client)
+    cl.user_session.set("mcp_session_cm", _session_cm)
     cl.user_session.set("graph", graph)
     cl.user_session.set("thread_id", thread_id)
 
@@ -186,6 +202,18 @@ async def on_chat_start():
             f"무엇을 도와드릴까요?"
         ),
     )
+
+
+@cl.on_chat_end
+async def on_chat_end():
+    """채팅 종료 시 MCP 서브프로세스 세션 정리."""
+    session_cm = cl.user_session.get("mcp_session_cm")
+    if session_cm:
+        try:
+            await session_cm.__aexit__(None, None, None)
+            logger.info("│  [App] MCP 세션 종료 완료")
+        except Exception as e:
+            logger.warning("│  [App] MCP 세션 종료 중 오류 (무시): %s", e)
 
 
 async def _ask_approval(pending: list) -> bool:
@@ -261,8 +289,6 @@ async def _stream_graph(
             node_output = dict(raw_output) if isinstance(raw_output, dict) else {}
 
             if node_name == "executor":
-                tool_ids = [getattr(m, "tool_call_id", "?") for m in node_output.get("messages", [])]
-                print(f"[Executor] tool_messages: {tool_ids}")
                 if step_ctx:
                     step_ctx.name = "✅ 도구 실행 완료"
 
@@ -279,11 +305,6 @@ async def _stream_graph(
                         plan_text = "\n".join(plan_lines)
                     else:
                         plan_text = node_output.get("plan", "")
-                    logger.info(
-                        "[App/%s] Tool 계획 수립 | steps=%d",
-                        planner_label, len(current_plan),
-                    )
-                    print(f"[{planner_label.capitalize()}] Tool 계획:\n{plan_text}")
                     plan_info = {"plan": plan_text, "has_pending": True}
                     if step_ctx:
                         step_ctx.name = "✅ 도구 실행 완료"
@@ -298,10 +319,9 @@ async def _stream_graph(
                             content = getattr(msgs[-1], "content", "")
                             if content:
                                 logger.info(
-                                    "[App/%s] 직접 답변 | len=%d",
+                                    "│  [App/%s] 직접 답변 생성 | len=%d",
                                     planner_label, len(content),
                                 )
-                                print(f"[{planner_label.capitalize()}] 직접 답변: {content[:100]}")
                                 final_answer_content = content
 
     return plan_info, final_answer_content
@@ -338,6 +358,7 @@ async def _run_graph(graph, input_state: dict, config: dict):
                 if fallback:
                     await _update_msg(result_msg, fallback)
 
+        result_msg.content = _sanitize_content(result_msg.content)
         await result_msg.update()
 
     except Exception as e:
@@ -378,6 +399,7 @@ async def _run_graph(graph, input_state: dict, config: dict):
                 if not is_approved and not plan_info.get("has_pending"):
                     exec_step.name = "✅ 재계획 완료"
 
+            result_msg.content = _sanitize_content(result_msg.content)
             await result_msg.update()
             if fallback:
                 await _update_msg(result_msg, fallback)

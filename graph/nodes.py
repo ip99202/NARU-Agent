@@ -115,8 +115,6 @@ async def router_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
     - 매 새 질의마다 iteration_count / last_plan_signature / error 상태를 리셋합니다.
     - executor → planner 루프백 시에는 이 노드를 거치지 않으므로 선택된 도구가 보존됩니다.
     """
-    logger.info("[Router] ▶ 진입 | messages=%d", len(state.get("messages", [])))
-
     # 가장 최근 HumanMessage 추출
     last_human = ""
     for msg in reversed(state.get("messages", [])):
@@ -124,7 +122,8 @@ async def router_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
             last_human = msg.content
             break
 
-    logger.info("[Router] 질문: %s", last_human[:100])
+    logger.info("┌─ [Router] 도메인 분류")
+    logger.info("│  질문: \"%s\"", last_human[:100])
 
     router_system = (
         "당신은 사용자 질문을 분석하여 관련 도메인을 분류하는 라우터입니다.\n"
@@ -155,10 +154,9 @@ async def router_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
     selected_tools = _tools_for_categories(categories, tools_map)
 
     logger.info(
-        "[Router] ◀ 완료 | categories=%s | tools(%d)=%s",
-        categories, len(selected_tools), selected_tools,
+        "└─ [Router] 분류 완료 → 도메인: %s | 활성 도구: %d개",
+        categories, len(selected_tools),
     )
-    print(f"[Router] categories={categories}, tools({len(selected_tools)})={selected_tools}")
 
     return {
         "selected_tools": selected_tools,
@@ -191,14 +189,14 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
     last_tool_error = state.get("last_tool_error", "")
 
     logger.info(
-        "[Planner] ▶ 진입 | iteration=%d | messages=%d | error_retries=%d",
+        "┌─ [Planner] 계획 수립 (iteration %d) | messages=%d | error_retries=%d",
         current_iter, len(state.get("messages", [])), error_retries,
     )
 
     # ── Self-Correction: 에러 재시도 한도 초과 ─────────────────────────────
     if error_retries >= MAX_RETRIES:
         logger.warning(
-            "[Planner] error_retries=%d >= MAX_RETRIES=%d → graceful 종료",
+            "└─ [Planner] Self-Correction 한계 도달 | error_retries=%d >= MAX_RETRIES=%d → 종료",
             error_retries, MAX_RETRIES,
         )
         graceful_msg = AIMessage(
@@ -222,7 +220,7 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
 
     # ── Self-Correction: 오류 컨텍스트 주입 ──────────────────────────────
     if last_tool_error:
-        logger.info("[Planner] Self-Correction 힌트 주입 | error=%s", last_tool_error[:120])
+        logger.info("│  Self-Correction: 이전 오류 기반 힌트 주입 | error=%s", last_tool_error[:120])
         correction_hint = SystemMessage(
             content=(
                 "[Self-Correction 지시] 이전 도구 호출에서 오류가 발생했습니다.\n"
@@ -240,7 +238,7 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
     if response.tool_calls:
         reasoning = (getattr(response, "content", "") or "").strip()
         if reasoning:
-            logger.info("[Planner] 판단 근거: %s", reasoning[:300])
+            logger.info("│  근거: %s", reasoning[:300])
 
         pending = [
             {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
@@ -252,7 +250,7 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
         prev_sig = state.get("last_plan_signature", "")
         if current_sig and current_sig == prev_sig:
             logger.warning(
-                "[Planner] Stagnation 감지 | 동일 시그니처 반복: %s → graceful 종료",
+                "└─ [Planner] Stagnation 감지 | 동일 plan 반복: %s → 종료",
                 current_sig[:120],
             )
             graceful_msg = AIMessage(
@@ -281,10 +279,13 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
             for tc in pending
         )
 
-        logger.info(
-            "[Planner] ◀ 완료 | pending_tools=%s | iteration=%d",
-            [tc["name"] for tc in pending], current_iter,
-        )
+        logger.info("│  Planning: %d-step plan generated", len(pending))
+        for i, tc in enumerate(pending):
+            logger.info(
+                "│    Step %d. %s(%s)",
+                i + 1, tc['name'], json.dumps(tc['args'], ensure_ascii=False),
+            )
+        logger.info("└─ [Planner] 실행 승인 대기 중...")
 
         return {
             "messages": [response],
@@ -297,7 +298,7 @@ async def planner_node(state: AgentState, llm: Any, tools_map: dict) -> dict:
         }
     else:
         logger.info(
-            "[Planner] ◀ 완료 | 직접 답변 | iteration=%d | content_len=%d",
+            "└─ [Planner] 직접 답변 생성 | iteration=%d | content_len=%d",
             current_iter, len(getattr(response, "content", "") or ""),
         )
         return {
@@ -322,9 +323,8 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
     """
     pending_tools = state.get("pending_tool_calls", [])
     logger.info(
-        "[Executor] ▶ 진입 | tools=%s | rejected=%s",
-        [tc["name"] for tc in pending_tools],
-        state.get("execution_rejected", False),
+        "┌─ [Executor] 도구 실행 (%d개) | rejected=%s",
+        len(pending_tools), state.get("execution_rejected", False),
     )
 
     tool_messages = []
@@ -339,7 +339,7 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
                     tool_call_id=tc["id"],
                 )
             )
-        logger.info("[Executor] ◀ 완료 | 거절 처리 | tools=%d", len(tool_messages))
+        logger.info("└─ [Executor] 거절 처리 완료 | synthetic ToolMessage %d개 생성", len(tool_messages))
         return {
             "messages": tool_messages,
             "pending_tool_calls": [],
@@ -361,7 +361,7 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
             content = error_msg
             error_occurred = True
             last_error_msg = error_msg
-            logger.warning("[Executor] 알 수 없는 Tool: %s", tool_name)
+            logger.warning("│  ✘ %s → UnknownTool: 존재하지 않는 도구", tool_name)
         else:
             try:
                 raw = await tools_map[tool_name].ainvoke(tool_args)
@@ -376,8 +376,8 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
                     content = str(raw)
                 results_summary.append({"tool": tool_name, "result": content[:200]})
                 logger.info(
-                    "[Executor] 성공: %s | args=%s | result_len=%d",
-                    tool_name, json.dumps(tool_args, ensure_ascii=False), len(content),
+                    "│  ✔ %s → %d자 반환",
+                    tool_name, len(content),
                 )
             except Exception as e:
                 error_msg = (
@@ -389,17 +389,19 @@ async def executor_node(state: AgentState, tools_map: dict) -> dict:
                 error_occurred = True
                 last_error_msg = error_msg
                 logger.warning(
-                    "[Executor] 오류: %s | args=%s | %s: %s",
-                    tool_name, json.dumps(tool_args, ensure_ascii=False), type(e).__name__, e,
+                    "│  ✘ %s → %s: %s",
+                    tool_name, type(e).__name__, e,
                 )
 
         tool_messages.append(
             ToolMessage(content=content, tool_call_id=tool_call_id)
         )
 
+    success_count = len(results_summary)
+    fail_count = len(pending_tools) - success_count
     logger.info(
-        "[Executor] ◀ 완료 | results=%d | error_occurred=%s",
-        len(results_summary), error_occurred,
+        "└─ [Executor] 완료 (성공: %d / 실패: %d)",
+        success_count, fail_count,
     )
 
     result: dict = {
