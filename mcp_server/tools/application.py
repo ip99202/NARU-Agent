@@ -9,6 +9,7 @@ Tools: 인터페이스 신청 (Interface Request)
 2. create_interface_request_step1           → POST /api/ifreq/reqInfo/step1
 3. search_chargr                            → GET  /api/bizcomm/chrgr
 4. save_eai_interface_request_regtemp       → POST /api/eai/regTemp
+15. save_mcg_interface_request_step2        → POST /api/mcg/req
 """
 from datetime import date, timedelta
 from collections import defaultdict
@@ -1409,4 +1410,128 @@ async def get_interface_request_detail_for_reference(req_num: str) -> dict:
         "step1":       step1,
         "eai_detail":  eai_detail,
         "eigw_detail": eigw_detail,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15. MCG 인터페이스 상세정보 저장 (Step2)
+# ─────────────────────────────────────────────────────────────────────────────
+@mcp.tool()
+async def save_mcg_interface_request_step2(
+    req_num: str,
+    req_list: list[dict],
+) -> dict:
+    """
+    MCG 인터페이스 신청서의 채널/거래 상세정보를 저장합니다. (POST /api/mcg/req)
+
+    [중요] 호출하기 전 사용자에게 입력값을 보여주고 이상이 없는지 확인한 뒤 실제 POST 요청을 해야 합니다.
+
+    req_list 각 항목은 mcgType에 따라 채널(채널) 또는 거래(거래) 구조를 가집니다.
+
+    ────────────────────────────────────────────────────────
+    [공통 필드] (채널 / 거래 모두)
+    ────────────────────────────────────────────────────────
+        mcgReqNum   (int,  필수): 항목 순번 (0부터 시작)
+        reqNum      (str,  필수): 요청서 고유번호 (예: "260416-0133")
+        mcgType     (str,  필수): "채널" 또는 "거래"
+        procSt      (str,  필수): 처리상태 (예: "1")
+        chnlNm      (str,  필수): 채널명 / 업무명
+        chnlId      (str,  필수): 채널 ID
+        lnkMthd     (str,  필수): 연결방식 [LNK_MTHD 코드]
+                        선택값: "EJB" | "HTTP" | "HTTPS" | "Servlet" | "TCP" | "TP"
+        chnlTyp     (str,  필수): 채널유형 [CHNL_TYP 코드]
+                        선택값: "INBOUND" | "OUTBOUND" | "Ch to Ch"
+        reqPurp     (str,  선택): 연동목적
+        chnlCnt     (str,  선택): 전문내용
+        maxTps      (str,  선택): 최대 TPS
+        tp          (str,  선택): TP명
+        serviceId   (str,  선택): 서비스 ID
+        serviceNm   (str,  선택): 서비스명
+        servletUrl  (str,  선택): 운영 Servlet URL
+        servletUrlDev (str, 선택): 개발 Servlet URL
+        dailyTps    (str,  선택): 일 TPS
+        dablInflu   (str,  선택): 장애 영향도
+        mcgRmk      (str,  선택): 비고
+        reqDt       (str,  필수): 반영 요청일 (YYYY-MM-DD)
+        chnlCom     (str,  선택): 채널사 그룹 [CHNL_GRP 코드]
+                        선택값: " Legacy" | "CTC" | "SKB" | "SS(SWING)"
+        chrgrList   (list, 필수): 담당자 목록 (최소 1명)
+            각 담당자:
+            - name      (str): 이름
+            - company   (str): 소속 회사
+            - chrgrId   (str): 담당자 ID
+            - phonNum   (str): 연락처
+            - email     (str): 이메일
+            - userId    (str): 사용자 ID
+            - chrgrRole (str, 선택): 담당자 역할 [CHRGR_ROLE 코드]
+                            선택값: "REQCHRGR"(송신담당자) | "RPSCHRGR"(수신담당자)
+            - mcgReqNum (int): 항목 순번 (mcgReqNum과 일치)
+            - reqNum    (str): 요청서 번호
+            - useYn     (str): 사용여부 ("Y")
+
+    ────────────────────────────────────────────────────────
+    [채널 전용 추가 필드] (mcgType == "채널")
+    ────────────────────────────────────────────────────────
+        virtualUserTeam (str, 선택): 가상사용자 팀
+        virtualUserOrg  (str, 선택): 가상사용자 조직
+        virtualUserHannm(str, 선택): 가상사용자 이름
+        svrList         (list, 선택): 서버 목록
+            각 서버:
+            - svrTyp    (str): 서버유형 [SVR_TYP 코드]
+                            선택값: "DEV"(개발기) | "PRD"(운영기) | "STG"(스테이징) | "EMG"(운영비상전환)
+            - svrKindCd (str, 선택): 서버 종류 [SVR_KIND_CD 코드]
+                            선택값: "01"(On-Promise) | "02"(Cloud)
+            - containerNum (str, 선택): 컨테이너 번호 [CONTAINER_NUM 코드]
+                            선택값: "00" | "02"(Container2) | "03"(Container3)
+                                    | "04"(Container4) | "05"(Container5) | "06"(Container6)
+            - sysNm     (str): 시스템명
+            - hostNm    (str): HOST명
+            - ip        (str): IP
+            - port      (str): Port
+            - os        (str): OS
+            - ipTyp     (str): IP유형 (예: "NAT", "VIP")
+            - mcgReqNum (int): 항목 순번
+            - reqNum    (str): 요청서 번호
+            - useYn     (str): 사용여부 ("Y")
+
+    ────────────────────────────────────────────────────────
+    [거래 전용 추가 필드] (mcgType == "거래")
+    ────────────────────────────────────────────────────────
+        opCd        (str,  선택): OP 코드
+        moduleNm    (str,  선택): 모듈명 (예: "MID")
+        mcgDealCd   (str,  선택): MCG 거래 코드
+        tcpIp       (str,  선택): TCP IP
+        tcpPort     (str,  선택): TCP Port
+        timeOut     (int,  선택): Timeout 값
+
+    Args:
+        req_num:  요청서 고유번호 (예: "260416-0133")
+        req_list: 채널/거래 항목 목록 (위 구조에 따라 구성)
+
+    Returns:
+        success  (bool): 처리 성공 여부
+        message  (str):  처리 결과 메시지
+        req_list (list): 저장된 항목 목록 (서버 응답 rstData.reqList)
+    """
+    if not req_list:
+        return {"success": False, "message": "req_list가 비어 있습니다.", "req_list": []}
+
+    session = await get_session()
+    payload = {"reqList": req_list}
+
+    resp = await session.post("/api/mcg/req", json=payload)
+    resp.raise_for_status()
+    body = resp.json()
+
+    if body.get("rstCd") != "S":
+        return {
+            "success": False,
+            "message": body.get("rstMsg", "MCG step2 저장 실패"),
+            "req_list": [],
+        }
+
+    return {
+        "success":  True,
+        "message":  body.get("rstMsg", "정상처리 되었습니다."),
+        "req_list": body.get("rstData", {}).get("reqList", []),
     }

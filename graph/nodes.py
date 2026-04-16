@@ -44,7 +44,7 @@ CATEGORY_PREFIXES: dict[str, list[str]] = {
                "save_interface_request", "search_chargr",
                "search_eigw_out_chargr", "search_interface_request",
                "get_eai_interface_request", "get_eigw_interface_request",
-               "get_interface_request_detail"],
+               "get_interface_request_detail", "save_mcg_interface_request_step2"],
 }
 
 # 카테고리 무관하게 항상 포함할 공통 도구
